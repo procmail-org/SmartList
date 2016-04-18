@@ -1,0 +1,289 @@
+	Only the last entry is complete, the others might have been condensed.
+
+1993/02/04: v2.80
+	    Started using CVS to manage the source (god's gift to programmers)
+1993/02/19: v2.81
+1993/06/02: v2.82 (never really released, was only available as prerelease 4)
+1993/07/01: v2.90
+1993/07/02: v2.91
+	    Corrected the SHELL=/bin/shell assignment in install.sh
+	    Made install.sh check if procmail was compiled without
+	       "#define console"
+	    Stripping off leading "From " lines now before passing mails
+	       through the mailinglist
+1994/06/14: v3.00
+	    Cleaned up install.sh* for the mailinglists: starting su with
+	       commands on stdin, checking some permissions now in the
+	       filesystem to prevent silly mistakes during the installation
+	    v2.91 archive server logged into the wrong file (../log), fixed
+	    Made the x_command script list the nearest match when adding
+	       or removing people from a list
+	    New x_command directive: checkdist
+	    New convenience command: donatelist
+	    Fixed a few typos that slipped into procbounce and flush_digests
+	    Explicit support for moderated lists
+	    Eliminating duplicate submissions
+	    Catering for autoreplies to people not on the accept list
+	    Flush_digests can now be forced to push out digests
+	    Made the generated digests MIME compliant
+	    Clipped an a bit too greedy -request-redirection-regexp in
+	       rc.submit
+	    Implicit subscription can be enabled (force_subscribe in
+	       rc.custom)
+	    You can create a subscreen script to screen the addresses
+	       of prospective subscribers (allows tighter control)
+	    Tuned the procbounce script (it does what I mean now
+	       and it got more verbose in its diagnostics)
+	    Taught procbounce about the more information deprived
+	       bounce messages (it can handle almost every bounce now)
+	    Changes to the arch_retrieve script:
+	       - allow the archive directory to be a symbolic link itself
+	       - friendlier help command
+	       - allow searching for regexps
+	       - protect the user against all too eager wildcards
+	       - fixed the ls command (one mail back per command)
+	       - made it more intelligent with respect to ignoring
+		 signatures
+	       - the standalone archive server will include the contents
+		 of the optional help.txt and info.txt files on a help
+		 request
+	       - raise the breakoff_search limit
+	       - allow the most common flags on egrep
+	    Carbon copies of subscription requests contained misleading
+	       diagnostics
+	    Subscription notifications will be done to both the sender
+	       and the new subscriber (in case the addresses differ)
+	    Fixed the problem of sometimes subscribing "please"
+	    Educated subscribe about some caveats when extracting the
+	       subscription addresses from the signatures
+	    Provided for standard hooks where people can plug in their
+	       semi-permanent local customisations in the rcfiles
+	    Split off the mailinglist scripts in a separate package called
+	       "SmartList"
+	    Flist recognises itself as flist if argv[0] starts with `flist'
+	    Install.sh now tries to preset rc.init.new with values for
+	       PATH, domain and listmaster (if you are upgrading)
+	    Rc.submit will add a To: field to outgoing mails if there wasn't
+	       any
+	    Mail to digested lists will be automatically reposted on the
+	       undigested list (if any)
+	    Provided for an alt_sendmail variable in rc.init, to switch
+	       between the two sendmail invocations
+	    Adding the X-Diagnostic: Unprocessed if no further processing
+	       seems to have taken place
+	    Moved the idcheck functionality into formail -D (due to
+	       popular demand)
+	    Use the setid program instead of su while installing (does away
+	       with those "inexplicable" installation problems)
+	    Weed out duplicate Date: fields before resending mails
+	    Created choplist, the dist-file expander
+	    Created cronlist, the new recommended script to put in the
+	       crontab entry (instead of flush_digests directly)
+	    Allow for carbon copies to the maintainer of unsubscription
+	       requests
+	    Documented and slightly changed the behaviour of the digest.admin
+	       administrivia files
+	    If possible, the lists are now installed relative to the home
+	       directory of the `list' account
+	    Install the examples directory to .examples
+	    Fixed the automatic archive history truncation for digests, they
+	       previously were not truncated at all
+	    Flist -v displays information about the currently installed version
+	       of SmartList
+	    Extracted the hardcoded help from the archive server into the
+	       archive.txt file
+	    Changed procbounce to send a final unsubscription message to
+	       people that were taken off the list due to too many bounces
+	    Allow reply_to to override the Reply-To: field in the digest
+	    Support for default help text responses
+	    Allow for unsubscription assistance
+	    Full blown MIME support for the archive server (binary files,
+	       arbitrary length, autosplitting, full MIME-encapsulation)
+	    The archive server understands the "version" command
+1994/06/15: v3.01
+	    v3.00 didn't react to plain (un)subscribe requests
+	    Installation as non-root had problems finding the right directory
+1994/06/16: v3.02
+	    Modifications to the archive server:
+	       - support the MIME dir="" and name="" parameters
+	       - force it to sleep between sending files (lowers load)
+	       - only queue sent files, then flush the queue (lowers load)
+	    Modifications to multigram:
+	       - Strip leading or trailing unbalanced "'s from mailaddresses
+	    The installation makes the scripts in .examples executable
+	    This version of flist -v erroneously displayed v3.01
+1994/06/30: v3.03
+	    Laid out the requirements for MIME support in the Manual
+	    Modifications to the archive server:
+	      - fix a typo in mimencap for the fallback Content-Type: field
+	      - work around a bug in mimencode
+	      - change the dir= attribute to directory=
+	      - also support the planned Content-Disposition: field (for naming
+		files)
+	      - propagate the SHELL variable to any sub-procmails we run
+	    Updated some misleading comments in rc.submit
+1994/08/02: v3.04
+	    Changes to mimencap.local:
+	       - Added support for the most recent MIME types
+	       - Change the format of the Content-ID field to be RFC822
+		 conforming
+	    Arch_trunc didn't work quite as expected (somewhere around
+	       v2.92pre10 this went wrong), and didn't truncate the archive
+	       at all
+	    Install.sh3 now prompts before overwriting mimencap.local
+	    Install.sh3 now generates diffs between rc.init files and tries
+	       to patch rc.init.new upon installation
+	    Allow submissions with "Precedence: junk"
+	    Inserted the missing newline for reply_to in digests
+	    Put the contents of a digest in an extra MIME message
+1994/08/04: v3.05
+	    No real changes, just to synchronise versions with procmail
+	    Most notably, formail v3.04 could cause problems on some machines
+	       where sendmail does not remove the leading From_ line on
+	       mail being forwarded
+1994/08/30: v3.06
+	    Removed the auto-encoding from mimencap.local, it was already
+	       (and better) done in mimencap itself
+	    Multigram truncates the dist file after unsubscribing someone
+	       (if the OS supports it, that is)
+	    Some new example files in the example directory
+	    Insert some appropriate Reply-To's in the archive server, in order
+	       to prevent people from replying to archive server mails
+	    Typo fixed in comments in rc.init
+	    Return the body of the mail as well if the person was not
+	       on the accept list
+	    Improved fuzzy search for explicit mail addresses in the
+	       subscription request
+1994/10/31: v3.10
+	    Changes to rc.submit:
+	       - Moved the accept.txt in front of the body of the mail
+	       - The initial submission of force subscribed people was lost,
+		 fixed
+	    Make use of the -z option of formail, get rid of the leading
+	       blank in the dist file for new subscriptions
+	    Arch_retrieve log format changed, included timestamps
+	    Standalone archive servers sometimes choked when receiving
+	       many requests simultaneously, fixed
+	    X-Command mails can unsubscribe anyone from a dist file,
+	       even if the address is above the `magic' line
+	    New flag in rc.custom: auto_unsubscribe
+	    New shell script: "led", it should be used to edit any SmartList
+	       governed file (does locking and attribute checks automatically)
+	    If no Message-ID could be recovered from a bounced message,
+	       procbounce always picked the same hashkey, fixed
+	    Binary files requested through the archive server got spurious
+	       newlines appended at the end, fixed
+	    Multigram can take optional multiple filenames now
+	    An optional second accept file "accept2"
+	    Procbounce ignores lines starting with [1-4][0-9][0-9] (transient
+	       failures)
+	    Choplist supports kernels that don't support the #! hack
+	    Subscribing third parties was impossible in v3.06, fixed
+	    Forgot to export PATH in the cronlist example
+	    Put in support to recognise the default domain for the accept
+	       list and force_subscribe flag
+	    Allow multigram to really display multiple matches (so that the
+	       checkdist and unsub_assist features finally work as intended)
+	    Tuned the multigram match values a bit, to improve the signal
+	       to noise ratio for typical mail addresses
+	    Mails that did not have a Return-Path: or Reply-To: field were
+	       not replied to correctly (regression bug since v3.06), fixed
+1995/05/17: v3.11pre3
+	    Cc_unsubrequests and cc_requests had some undesirable side-effects
+	    Procbounce reported spurious errors if badly formatted bounces
+	       were received
+	    Make use of the more readable "variable ?? y" wherever feasible
+	    New rc.custom variable "divertcheck"
+	    Flist will now bounce the mail instead of trying anyway if it has
+	       insufficient privileges
+	    Forgot to check the reject list if force_subscribe was used
+	    Changes to the arch_retrieve script:
+	       - Requests to egrep without providing at least one filename
+		 prohibited processing the rest of the commands in the mail
+	       - New command quit or exit to prohibit interpreting the rest
+		 of the mail
+	       - Eliminated the ${:+} construct, old shells complained
+	    Procbounce ignores 0xx SMTP reply codes as well now
+	    Some shells don't grok [!/], worked around this in install.sh
+	    Changed renaming From_ to X-Envelope-From: to X-From_:
+	    Made the default help.txt a bit more explicit
+	    Changes to multigram:
+	       - Eliminated lots of system calls during fuzzy matching
+		 (basically a speedup)
+	    The Solaris 2.3 grep doesn't accept -e options, caused a minor
+	       glitch in createlist
+	    Provide examples/rc.local.r00 sample for X-Command fields in the
+	       body
+	    Mask out Read-Receipt-To field on mails going through
+	    The Approved field on moderated lists was not checked strictly
+	       enough
+	    Handle addresses with embedded newlines
+	    Third party subscriptions didn't send subscribe.files to the new
+	       subscriber
+	    If someone (accidentally) removes the dist file, the subscribe
+	       script will recreate an empty one (and log a warning)
+1995/10/29: v3.11pre4
+	    Changes to multigram:
+	       - Account for compilers with sizeof(off_t)>sizeof(long)
+	    Get rid of X-Confirm-Reading-To: fields on submissions
+	    Deal more gracefully with those superverbose smail error mails
+	    Forced subscriptions on moderated lists didn't work too well
+	    Include author name in digest topic summaries
+	    Use the -odi option to sendmail to improve control of the load
+1997/04/28: v3.11pre7
+	    Changes to multigram:
+	       - Work around a DomainOS compiler bug
+	    Createlist didn't work well if $HOME was set wrong
+	    Spurious "attempt" unsubscribe notices that were more than just
+	       attempts
+1999/03/02: v3.12
+	    donatelist now does the chmod g+s after the chown
+	    Recognize more queue warning messages
+	    Obtain the SmartList version number directly from patchlevel.h
+	    Concatenate the header and body in a more efficient manner
+	    Changes to multigram:
+	       - Correctly locate '@' in addresses to look for `close' domains
+	       - choplist wasn't counting addresses correctly
+1999/03/31: v3.13
+	    No real changes, just to synchronise versions with procmail
+	    Most notably, procmail v3.12 broke $$=^0 conditions
+	    The 3.12 HISTORY entry was incomplete
+1999/12/17: v3.14 (never really released, was only available as prerelease)
+	    If no Message-ID could be recovered from a bounced message,
+	       procbounce always picked the same hashkey (this time I mean it)
+	    Strip List-* header fields from incoming messages and add
+	       List-Subscribe: and List-Unsubscribe: with mailto: URLs for
+	       the request address
+	    Automatic cross-posting of messages sent to a digested list over
+	       to the undigested list only worked if the latter contained
+	       the letter 'y'
+	    Recognize still more queue warning messages
+	    Ignore "Data format", 8-bit conversion, and size errors -- the
+	       address is fine, the particular message is presumably at fault
+	    Use four digit digest volume numbers starting in the year 2000
+	    Setting archive_hist to "all" causes the archive to never be
+	       truncated
+	    Changes to multigram:
+	       - ignore words that start with an '@' unless they look like
+		 a route address
+	    Reject attempts to subscribe someone twice with an X-Command mail
+	    Recognize DSNs and enable some primitive parsing of them
+	    Mention online FAQ in SmartList Manual
+2000/09/03: v3.15
+	    Let the location of the "latest" archive be set from rc.custom
+	    Add List-Help: and List-Post: header fields with mailto: URLs for
+	       the request address and correct format of other List-* header
+	       fields
+	    "Wrong address" archive retrieval warnings could end up in the
+	       header
+	    Send submitted messages to maintainer if moderators file is
+	       needed but missing
+	    Only add List-Subscribe: and List-Unsubscribe: header fields if
+	       auto_subscibe and auto_unsubscribe, respectively, are enabled
+	    Clarify the error message when a list cannot be created
+	    When forwarding a message from a digest list to its corresponding
+	       undigested list, remove any Delivered-To: header field
+	       containing the name of the digested list, thus allowing the
+	       message forwarded back to go out.
+	    Changes to multigram:
+	       - prevent attempts to exercise a Linux kernel security hole

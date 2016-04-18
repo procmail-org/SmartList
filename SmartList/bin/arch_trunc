@@ -1,0 +1,20 @@
+#! /bin/sh
+:
+#$Id: arch_trunc,v 1.10 1999/12/17 07:04:47 guenther Exp $
+
+echo=echo		# /bin/echo
+ls=ls			# /bin/ls
+sed=sed			# /bin/sed
+rm=rm			# /bin/rm
+
+if cd archive/$archive_dir
+then
+  case "$ARCHIVE" in	# do not start removing every time, to decrease load
+     *[248])
+	$rm -f _dummy_ \
+	 `$ls -t | $sed -n -e '/^[0-9]/ p' | $sed -e '1,'$archive_hist' d'` ;;
+  esac
+else
+  $echo "Don't start this script directly, it is used in rc.submit"
+  exit 64
+fi

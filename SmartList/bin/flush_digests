@@ -1,0 +1,126 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh "$0" $argv:q # we're in a csh, feed myself to sh
+$O || exec /bin/sh "$0" "$@"		  # we're in a buggy zsh
+#########################################################################
+#	flush_digests	To send off digests when needed			#
+#									#
+#	You should run it daily by cron (it needs to be started with	#
+#	an absolute path, do not rely on PATH to find it).		#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: flush_digests,v 1.15 1995/03/20 14:50:13 berg Exp $
+
+test=test		# /bin/test
+mkdir=mkdir		# /bin/mkdir
+sed=sed			# /bin/sed
+cat=cat			# /bin/cat
+rm=rm			# /bin/rm
+ls=ls			# /bin/ls
+echo=echo		# /bin/echo
+touch=touch		# /bin/touch
+dirname=dirname		# /bin/dirname
+lockfile=lockfile	# /usr/local/bin/lockfile
+
+if $test $# = 0 -o .-c = ".$1" -a \( $# = 1 -o .-f = ".$2" -a $# = 2 \)
+then
+:
+else
+  $echo "Usage: flush_digests [-c [-f]]" 1>&2
+  exit 64
+fi
+
+tmprequest=tmp.request
+tmpfrom=tmp.from
+
+digestbody=archive/latest/digest.body
+
+if $test .-c = ".$1"
+then
+  force=""
+  $test .-f = ".$2" && force=yes
+  digestheader=archive/latest/digest.header
+  digestadmin=digest.admin
+  digestadmin2=archive/latest/$digestadmin
+  digesttrailer=archive/latest/digest.trailer
+
+  $test -f $digesttrailer || exit 0	# early exit, nothing to do
+
+  set `cat .digest.params`
+  digest_age=$1; shift
+  digest_size=$1; shift
+  archive_hist=$1; shift
+  umask $1; shift
+  SENDMAIL="$*"
+
+  $test yes = "$force" && digest_age=0	# force digest out
+
+  if senddigest $digest_age $digest_size $digestbody $digesttrailer \
+   $tmprequest $tmpfrom $digestheader $digestadmin $digestadmin2
+  then
+     set dummy `$sed -n \
+      -e '1,/^$/ s/^Subject:.*Digest V\([0-9]*\) #\([0-9]*\)/\1 \2/p' \
+      <$digestheader`
+     Volume=archive/volume$2
+     Issue=$Volume/$3
+     $test -d $Volume || $mkdir $Volume
+     $test -f $Issue && $echo 1>&2 "flush_digests: Warning, overwriting $Issue"
+     $cat $digestheader >$Issue
+     if $test ! -f $Issue
+     then
+	$echo 1>&2 "flush_digests: Couldn't write $Issue, terminating"
+	exit 73
+     fi
+     $echo "" >>$Issue
+     if $test -f $digestadmin -o -f $digestadmin2
+     then
+	$echo Administrivia: >>$Issue
+	$cat $digestadmin $digestadmin2 >>$Issue 2>/dev/null
+	$echo "" >>$Issue
+     fi
+     $cat $digestbody $digesttrailer >>$Issue 2>/dev/null
+     $rm -f $digesttrailer $digestbody $digestadmin2
+     $SENDMAIL <$Issue
+     cd archive
+     $rm -f _dummy_ \
+ `$ls -td volume*/* | $sed -e '/\/.*[^0-9]/ d' | $sed -e '1,'$archive_hist' d'`
+  fi
+
+else
+  if test -z "$cronlist"	# for backward compatibility
+  then
+     a=`$dirname "$0"`/..
+     if cd "$a"
+     then
+     :
+     else
+	$echo "Can't chdir to $a" 1>&2 ; exit 66
+     fi
+  fi
+  for a in dummy */.digest.params
+  do
+     if $test "$a" != dummy -a -f "$a"
+     then
+	list=`$dirname $a`
+	if $test -f $list/$digestbody
+	then
+	   cd $list
+	   export list
+	   $lockfile -l3600 tmp.lock
+	   trap "$rm -f tmp.lock; exit 1" 1 2 3 13 15
+	   $cat /dev/null >$tmprequest 2>$tmpfrom
+	   $touch $digestbody
+	   if $test -f .digest.force
+	   then
+	      PATH=.:../SedBinDir:../.bin:$PATH \
+	       ../SedBinDir/flush_digests -c -f
+	   else
+	      PATH=.:../SedBinDir:../.bin:$PATH ../SedBinDir/flush_digests -c
+	   fi
+	   trap "" 1 2 3 13 15
+	   $rm -f tmp.lock .digest.force
+	   cd ..
+	fi
+     fi
+  done
+fi

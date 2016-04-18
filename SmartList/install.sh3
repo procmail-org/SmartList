@@ -1,0 +1,232 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh install.sh3  # we're in a csh, feed myself to sh
+$O || exec /bin/sh install.sh3		  # we're in a buggy zsh
+#$Id: install.sh3,v 1.46 1995/10/30 02:09:10 srb Exp $
+
+test -z "$bindir" && echo "Call install.sh instead" && exit 64
+
+. ./targetdir.tmp			# get ln & homedir from install.sh2
+
+chmod go+x "$target"			# the aliases won't work otherwise
+chmod g+s "$target" 2>/dev/null		# try to let the group id be inherited
+
+FRAGILE="rc.init "
+OPTIONALBIN="cronlist mimencap.local "
+OPTIONALETC="help.txt archive.txt subscribe.txt unsubscribe.txt"
+DIRS="etc examples"
+
+TMPFLIST="$target/$bindir/flist.$$"
+
+if test -f "$target/.etc/rc.init"
+then
+  echo "I see that you are upgrading"
+  echo "Creating $target/.etc/rc.lock file now"
+  echo "in order to stall any new mails while we are upgrading"
+
+  touch "$target/.etc/rc.lock"
+
+  echo "Pausing for eight seconds (to give already submitted mails a chance"
+  echo "to be delivered)..."
+  sleep 8
+
+  echo "Preserving any old files: $FRAGILE"
+
+  for a in $FRAGILE
+  do
+     test -f "$target/.etc/$a" &&
+      mv -f "$target/.etc/$a" "$target/.etc/$a.#old"
+  done
+
+  echo Fixing up any incompatibilities with older versions...
+
+  ( cd "$target"
+    touch .etc/unsubscribe.txt .etc/archive.txt
+    for a in *
+    do
+       if test -d $a -a -f $a/rc.custom -a -f $a/rc.init
+       then
+	  test -f $a/accept || (cd $a && $ln dist accept 2>/dev/null )
+	  if test ! -f $a/unsubscribe.txt ||
+	   grep 'digest_flag.*<0' $a/rc.custom >/dev/null
+	  then
+	     if sed -e \
+'s/^\([	 ]*undigested_list\)[	 ]*\(=[^#]*\$list@\$domain[	 ]\)/#\1\2/' \
+	       -e '/foreign_submit/,/X_COMMAND/ s/=\([	 ]*\)<0/\1/' \
+	       -e '/foreign_submit/,/X_COMMAND/ s/=\([	 ]*\)>0/=\1yes/' \
+	       -e 's/\(cc_requests[	 ]*=[	 ]*\)c/\1yes/' \
+	       <$a/rc.custom >$a/#rc.custom &&
+	      cat $a/#rc.custom >$a/rc.custom &&
+	      rm -f $a/#rc.custom
+	     then
+	     :
+	     else
+		echo "*****************************************************"
+		echo "Couldn't move $a/#rc.custom over $a/rc.custom"
+		echo "Please do that by hand, or repeat the install.sh"
+		echo "script all over, after making the rc.custom files"
+		echo "group writable."
+	     fi
+	  fi
+	  test -f $a/unsubscribe.txt ||
+	   (cd $a && $ln ../.etc/unsubscribe.txt unsubscribe.txt 2>/dev/null )
+	  test -f $a/archive.txt ||
+	   (cd $a && $ln ../.etc/archive.txt archive.txt 2>/dev/null )
+       fi
+    done
+  )
+fi
+
+echo Installing...
+
+for a in bin $DIRS
+do
+  targdir="$target/.$a"
+  test $a = bin && targdir="$target/$bindir"
+  mkdir "$targdir" 2>/dev/null
+  c=`cd $a; echo *`
+  for b in $c
+  do
+     sed -e "s:SedBinDir:$bindir:g" -e "s:SedHomeDir:$homedir:g" \
+      -e "s:SedBinMail:$binmail:g" <"$a/$b" >"$targdir/$b"
+     ( exec >/dev/null 2>&1
+       test -x "$a/$b" -a ! -x "$targdir/$b" && chmod 755 "$targdir/$b"
+     )
+  done
+done
+
+for a in $OPTIONALBIN
+do
+  if test -f "$target/$bindir/$a" -a cronlist != $a
+  then
+     echo "*****************************************************************"
+     echo "$target/$bindir/$a already exists, replace it? [y]"
+      ( read b <&4			# put it in parens to work around
+	case "X$b" in			# a bug in (stdin of) bash 1.14.4
+	   X[yY]|X) echo "Replacing old $a."
+	      rm -f "$target/$bindir/$a" ;;
+	esac
+      )
+  fi
+  if test -f "$target/$bindir/$a"
+  then
+     echo "Skipped: $bindir/$a"
+     echo "	Copy by hand from .examples/$a if you like."
+  else
+     sed -e "s:SedBinDir:$bindir:g" -e "s:SedHomeDir:$homedir:g" \
+      -e "s:SedBinMail:$binmail:g" <"examples/$a" \
+      >"$target/$bindir/$a"
+  fi
+done
+
+for a in $OPTIONALETC
+do
+  if test -f "$target/.etc/$a"
+  then
+     echo "Skipped: .etc/$a"
+     echo "	Copy by hand from .examples/$a if you like."
+  else
+     sed -e "s:SedBinDir:$bindir:g" -e "s:SedHomeDir:$homedir:g" \
+      -e "s:SedBinMail:$binmail:g" <"examples/$a" >"$target/.etc/$a"
+  fi
+done
+
+chmod 0755 "$target/$bindir/cronlist"
+chmod 0640 "$target/.etc/rc.custom" "$target/.etc/rc.init"
+
+for a in $FRAGILE
+do
+  b="$target/.etc/$a"
+  if test -f "$b.#old"
+  then
+     mv -f "$b" "$b.new"
+     mv -f "$b.#old" "$b"
+     if test "X$a" = "Xrc.init"
+     then
+	if test -f "$b.dist" &&
+	 ( exec 2>/dev/null
+	   if diff >/dev/null; test $? = 2
+	   then
+	      diff -au "$b.dist" "$b" >"$b.dif"
+	      test "$?" = 0 -o "$?" = 1 && exit 0
+	      diff -c "$b.dist" "$b" >"$b.dif"
+	      test "$?" = 0 -o "$?" = 1 && exit 0
+	   fi
+	   exit 1
+	 )
+	then
+	   echo "Diffing $b.dist $b"
+	   rm -f $b.dist
+	   cp $b.new $b.dist
+	   echo "Patching $b.new to match $b"
+	   patch -s "$b.new" <"$b.dif" ||
+	    echo "Patch failed (partially perhaps, look for a .rej file)"
+	   diff "$b" "$b.new" >/dev/null &&
+	    echo "The patched $b.new and existing
+	$b appear to be identical now."
+	else
+	   rm -f $b.dist
+	   cp $b.new $b.dist
+	fi
+	chmod 0440 $b.dist
+     fi
+  elif test "X$a" = "Xrc.init"			# first time
+  then
+     rm -f $b.dist
+     cp $b $b.dist				# simply create it
+     chmod 0440 $b.dist
+  fi
+done
+
+rm -f "$target/$bindir/multigram"
+cp ../src/multigram "$target/$bindir"
+
+sed -e "s:/home/slist/.bin:$target/$bindir:g" <Manual >"$target/.etc/Manual"
+mv -f "$target/$bindir/procmail" "$target/$bindir/.procmail" 2>/dev/null
+chmod 0755 $target/$bindir/* 2>/dev/null
+chmod 0644 $target/$bindir/mimencap*
+
+rm -f "$TMPFLIST"
+$ln "$target/$bindir/flist" "$TMPFLIST" 2>/dev/null
+mv -f "$target/$bindir/multigram" "$target/$bindir/flist"
+for a in multigram senddigest idhash choplist
+do
+  rm -f "$target/$bindir/$a"
+  $ln "$target/$bindir/flist" "$target/$bindir/$a"
+done
+
+rm -f "$TMPFLIST" $target/$bindir/flist.[0-9]*
+chmod 0755 "$target/$bindir/flist" 2>/dev/null
+chmod g+s "$target/$bindir/flist" 2>/dev/null
+chmod u+s "$target/$bindir/flist" 2>/dev/null
+mv -f "$target/$bindir/.procmail" "$target/$bindir/procmail" 2>/dev/null
+
+ls -ld "$target/$bindir" $target/$bindir/* >>install.list
+
+for a in $DIRS
+do
+  ls -ld "$target/.$a" $target/.$a/* >>install.list
+done
+
+echo ""
+echo "For a list of all installed files, look in install.list"
+echo ""
+
+if test -f "$TMPFLIST"
+then
+  echo "The old flist binary seems to be busy, so I couldn't remove it."
+  echo "You'll have to remove it yourself:"
+  echo "	/bin/rm -f $TMPFLIST"
+fi
+
+echo "Linking .etc/rc.main to $target/.procmailrc"
+if test -f "$target/.procmailrc.old"
+then
+  echo "There already is a $target/.procmailrc.old"
+  rm -f "$target/.procmailrc"
+elif test -f "$target/.procmailrc"
+then
+  echo "Renaming the old to $target/.procmailrc.old"
+  mv "$target/.procmailrc" "$target/.procmailrc.old"
+fi
+(cd "$target" && $ln .etc/rc.main .procmailrc )
+cd .

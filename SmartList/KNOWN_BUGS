@@ -1,0 +1,4 @@
+Address confusion in SmartList
+    While SmartList accepts subscribe and unsubscribe requests that
+    specify another address, rc.request checks for the address from the
+    headers, not from the request itself.

@@ -1,0 +1,246 @@
+	SmartList Installation guide:
+
+		1. Prerequisites
+		2. Installing the scripts
+		3. Sharing the scripts on multiple architectures
+		4. If you don't have a sendmail compatible mailer
+		5. Upgrading from previous versions of SmartList
+		6. Moving an existing list to a different directory
+
+				---
+
+1. Prerequisites
+   -------------
+
+In order to make sure that SmartList works reliably for both remote and
+local mail, it has to be run under someone's account.
+The recommended procedure would be to create a new account and group named
+"slist" that is only going to be used to manage SmartList mailinglists.
+
+You are of course free to choose any name you'd like instead of "slist".
+Common names would be "slist", "list" or "lists".  Do not pick "smartlist"
+because that name is nine characters long.  The maximum for most systems is
+eight.
+Also, DO NOT create an account name equal to the name of a mailinglist you'd
+like to create later on.
+
+If you are unable/unwilling to create a new user just for SmartList,
+then it should be installed in a separate subdirectory.	 The owner of this
+directory will still be able to receive regular mail.
+
+SmartList makes use of the -f option of sendmail.  This option makes sure
+that the sender address on the envelope (the From_ line) contains the
+proper list address.  In order for this option to work, the user using it
+(either "slist" or the regular user the lists run under) must be on the
+trusted-user-list of sendmail.	To enter the user "slist" on the
+trusted-user-list simply edit the sendmail.cf file and add a line reading:
+
+Tslist
+
+Restarting sendmail is not necessary.
+
+If can't put this in the sendmail.cf file, the mailinglist scripts will still
+work, albeit under less than ideal circumstances (i.e.	automatic bounce
+handling is severely impaired).
+
+				---
+
+2. Installing the scripts
+   ----------------------
+
+Suppose you have created this pseudo user "slist" with a specified home
+directory of /home/slist
+
+Now create /home/slist by hand and make sure that you chown it to "slist".
+Also chgrp it to "slist" now if you created a group for that.  If you
+do not have a separate group for the list, you have to make sure that you
+change the setting of UMASK in the rc.init file.  By default the group
+to which the "slist" user belongs can write in many of the files.
+
+Next, execute the "install.sh" script present in this directory by typing
+something like:
+
+	sh install.sh /home/slist
+
+If you are setting up SmartList under your own account, simply creating
+a separate directory and running the install.sh script should suffice.
+
+This script will then create two subdirectories (.bin and .etc) in
+/home/slist.  These directories will be filled with the files contained
+in the bin and etc subdirectories here.	 It will also make sure that
+the "multigram" program is compiled from the procmail*/src directory and
+copied into /home/slist/.bin.
+
+	The only program/binary that contains harcoded information is
+	the /home/.bin/flist program.  It contains both the name of the user
+	that owns the lists ("slist" in this case) and the absolute path to
+	the mailinglist directory (/home/slist in this case).  This is
+	needed for security reasons.  If the mailinglist directory can
+	be found in the home directory tree of the "slist" user, the stored
+	path will not be absolute, but relative to the home directory
+	of the "slist" user instead.
+
+	This means that if either the name of the user or the name
+	of the directory changes, you'll have to reinstall the mailinglist
+	scripts (or at least the flist binary).	 You can treat it as if it
+	were an upgrade, see paragraph 5 below for more information.
+
+	This also means that if you like to have several main mailinglist
+	directories, you'll need a separately installed flist binary
+	for each one of them.  Simply install.sh to every directory anew.
+	To conserve space, or to centralise administration, you can then
+	(hard)link all files in all the .bin and .etc directories with
+	their counterparts (except the flist binaries and anything linked
+	to them of course).
+
+Furthermore install.sh will link /home/slist/.etc/rc.main to
+/home/slist/.procmailrc.  This is of course superfluous (but nondestructive) if
+you are still using this account to receive regular mail.
+
+Depending on your mail configuration, if procmail has not been integrated
+in the maildelivery system (see procmail*/examples/advanced for more
+information on that topic) you should also create a .forward file with an
+appropriate content (see "man procmail", the NOTES section at the end).	 This,
+however, is only necessary if you created a seperate "slist" account.
+
+	Next, edit the /home/slist/.etc/rc.init file.	Make sure that
+	"domain" is set to the right value, and you can optionally specify a
+	"listmaster";  also check if the PATH is correct and make sure
+	that procmail and formail are in the path.
+
+On some sites the aliases file is not exactly /usr/lib/aliases, or its format
+is slightly incompatible with standard sendmail.  In those cases (for
+your own convenience) it would be wise to edit the .bin/createlist script
+to display the proper aliases to insert (so that you can cut and paste
+in the future).
+
+For further instructions, you should consult the "Manual" file, it has
+been copied to the /home/slist/.etc directory as well, and can serve as a
+quick reference.
+
+				---
+
+3. Sharing the scripts on multiple architectures
+   ---------------------------------------------
+
+For people that want to run SmartList on a shared filesystem across different
+architectures there exists the possibility of using several .bin directories.
+Simply use something like:
+	sh install.sh /home/slist .bin.sun4
+to install to a different .bin directory.  Repeat the complete procmail and
+SmartList installation for every architecture, specifying a different .bin
+directory every time.
+
+				---
+
+4. If you don't have a sendmail compatible mailer
+   ----------------------------------------------
+
+As is, SmartList is preconfigured to use sendmail (or a compatible
+mailer like smail) to actually transport the mails.  If your system only
+supplies a /bin/rmail or /bin/mail to transport mails, then several of
+the options used when invoking sendmail will not work.
+
+For these cases you have to edit the /home/slist/.etc/rc.init file.
+Look for a SENDMAIL assignment.	 Supplied with these scripts is a poor man's
+sendmail.  It was installed in the .bin directory belonging to the
+list.  Make sure that the SENDMAIL assignment points at the "sendmails" script.
+And, of course, don't forget to uncomment the SENDMAIL assignment and
+the two sendmailOPT* assigments following it.
+
+				---
+
+5. Upgrading from previous versions of SmartList
+   ---------------------------------------------
+
+You can simply use the install.sh script again to install directly over
+the old installation IF you customised ONLY the rc.init, rc.custom and
+various *.txt files.
+
+Once you ran the install.sh script, you'll have to merge the changes
+you made to the old rc.init file (still there) into the rc.init.new file.
+If, during the installation, the diff and patch programs were available,
+an attempt is made to carry over all changes from the old rc.init file
+into the rc.init.new file (even if this has been done, you must still
+cat it back over the rc.init file, unless the files turn out to be identical
+of course).  The rc.init.dist file will contain a copy of the rc.init file as
+it came with the distribution.	Do not change or remove this file, a future
+upgrade uses this file to generate the necessary diffs (if available).
+
+Since the install.sh script will create the .etc/rc.lock file for you,
+you have 17 minutes to cat-over the rc.init.new file.  If it should take
+longer, touch the rc.lock file every so often.	As soon as the difference
+between its mtime and the current time exceeds 17 minutes, the flist programs
+start delivering mail to the lists again.
+
+Then cat (yes, use `cat', because you have to preserve any hardlinks) the
+rc.init.new file into the rc.init file (e.g. cat rc.init.new >rc.init).
+
+If there are any new entries in the new rc.custom file template, their
+omission in the old rc.custom files should not cause any problems (i.e. the
+new rc.init already provides the new defaults).
+
+If you customised more than just the rc.init or rc.custom files, you'll
+have to make diffs between the old versions of the scripts, then install
+the new scripts and then apply back the diffs (probably by hand).
+
+You can quickly verify which files are linked to other files by
+simply typing something like:
+
+	showlink rc.init
+
+After you are finished, remove the rc.lock file again.	If it is older
+than 17 minutes it is ignored anyway, but it's cleaner this way.
+
+				---
+
+6. Moving an existing list to a different directory
+   ------------------------------------------------
+
+This can be safely done by following these steps:
+a.Create the .etc/rc.lock file.
+b.Copy the tree to the new location.  Be sure to preserve hard and
+  softlinks while doing this, tar can do this for you.	If you'd like to
+  use tar to copy the tree, a suggested /bin/sh command line would be:
+
+	cd olddir; tar cf - . | (cd newdir; tar xvf -)
+
+  If you are moving the tree instead, make sure you create a symbolic link
+  from the old location to the new immediately after having moved the tree
+  (there is a race condition here, mail arriving after having moved, but
+  before having created the symbolic link will bounce).
+c.Create a symbolic link to the new location with (if your filesystem does not
+  support symbolic links, see below):
+
+	ln -s newdir olddir/.etc/Moved
+
+d.If the home directory of the list user needs to be changed, do it now.
+  Make sure the change is in effect before proceeding with step e.
+  You can buy some time by doing a "touch olddir/.etc/rc.lock" every 16
+  minutes.
+e.Install SmartList from the distribution again, on top of newdir, i.e. simply
+  regard it as an upgrade (you can skip this part if "flist -v" indicates that
+  it is using the same path relative to the (changed) home directory of the
+  slist user).
+f.Update your /usr/lib/aliases (or equivalent) file, make sure the aliases run
+  the new flist binary.
+g.Remove both the olddir/.etc/rc.lock and any newdir/.etc/rc.lock file.
+h.Wait at least 30 seconds before removing the olddir tree (if at all), in
+  order to give the already running flists a chance to wake up and follow the
+  symbolic link (if necessary, check that no old flists are running anymore).
+
+The alternative way to move the lists (mandatory for filesystems that do not
+support symbolic links):
+a.Remove all */rc.lock files, kill the sendmail daemon (in other words: do
+  whatever is necessary to prevent further invocations of the old flist binary)
+  and check if any flist or procmail programs belonging to the lists are still
+  running, if they do, wait until they are gone.
+b.As above.
+c.This step is irrelevant now.
+d.As above.
+e.As above.
+f.As above.
+g.This step is irrelevant now.
+h.You can remove the olddir tree without further ado (if you like).
+
+				---

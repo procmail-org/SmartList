@@ -1,0 +1,766 @@
+		SmartList mailinglist management
+		--------------------------------
+
+	Copyright (c) 1993-2000, Stephen R. van den Berg, The Netherlands.
+				 <srb@cuci.nl>
+
+NOTE: Run "flist -v" to find out more about your installed version of
+      SmartList.
+
+Contents:
+---------	1. Creating and removing mailinglists or archive servers
+		2. Remote maintenance of mailinglists
+		3. Customisation
+		3a.Digest processing
+		3b.Restricting subscriptions
+		3c.Restricting submissions
+		3d.Auto subscription on first submission
+		3e.Autosending files to new subscribers
+		3f.Moderated lists
+		3g.List of lists
+		3h.Positively discriminate certain daemons
+		3i.Default help text replies
+		3j.Unsubscribe assistance
+		3k.Exploding other (non-SmartList) lists
+		3l.Making the subscriber list public
+		3m.Schematic overview of what goes on behind the scenes
+		4. The archive server
+		4a.Sending files to the archive server
+		4b.Restricting access to the archive server
+		5. The format of the dist file
+		6. Multigram and the thresholds in rc.init/rc.custom
+		7. Choplist & sendmail
+		8. FTP addresses & the SmartList mailinglist
+		9. The FAQ
+
+$Id: Manual,v 1.57 2000/01/29 06:52:14 guenther Exp $
+
+
+1. Creating and removing mailinglists or archive servers
+   -----------------------------------------------------
+
+Make sure that the .bin directory is in your PATH.  Now you can issue
+commands like:
+
+	createlist testing
+	createlist testing joe@somewhere.edu
+	createlist -a testing joe@somewhere.edu
+	removelist testing
+
+The first command creates a mailinglist with two useful addresses:
+
+	testing
+	testing-request
+
+The second command does the same, but it also specifies joe@somewhere.edu
+to be the responsible contact person for this list.
+
+The third command does the same, except instead of creating a mailinglist,
+it creates an archive server.
+
+The fourth command removes all traces of the "testing" mailinglist again.
+
+There are four other convenience-utilities that can be used:
+	led	A wrapper around your editor, should be used instead
+		of calling up your editor directly whenever editing a
+		SmartList managed file.	 It automatically takes care
+		of proper locking and performs attribute checks.
+	delink
+		It will unlink a file from its hardlinked counterpart(s)
+		(without deleting it).
+	showlink
+		It will display what groups of files are linked together.
+	donatelist
+		It will put a list under complete and exclusive control
+		of the maintainer (a local user).  See below.
+
+If you are running several lists maintained by separate maintainers, you
+can give a maintainer complete and sole control over his or her own list
+without the need for them to have user list or group list rights.
+For this to work, you simply have to "donatelist the_maintainer his_list"
+the whole tree that contains his list to him (her).  Make sure that the
+group id of all necessary files in the tree are still group-writable by
+"list", because that's the access privilege the mailinglist will be running
+under.
+
+The maintainer has to be careful to use an umask of 007 while editing in
+his mailinglist directory.  This allows the mailinglist-programs to function
+while still limiting access to all mailinglist files to *one* person only
+(the maintainer).
+
+N.B. The person a list is being donated to is able to gain access to the
+     SmartList account, if he tries hard enough.  To get secured multiple
+     lists, install SmartList several times.
+
+
+2. Remote maintenance of mailinglists
+   ----------------------------------
+
+To facilitate remote maintenance of some mailinglists by their maintainers
+I have created the .bin/x_command script.  It parses mails sent to the
+-request address and can execute some administrative commands.
+
+The mail should be sent to the -request address of a mailinglist and
+should contain a field in the header looking like this:
+
+X-Command: joe@somewhere.edu password command
+
+"command" can be anything of the following:
+
+	subscribe mailaddress
+	unsubscribe mailaddress
+	checkdist mailaddress		To multigram-match mailaddress to
+					the list (showing the eight best
+					matches)
+	showdist			To list the distfile
+	showlog				To list the log
+	wipelog				To clear the log
+	help				To show this command summary
+	info				Ditto
+
+The exact fieldname defaults to "X-Command", but can be customised to
+whatever you want.
+
+The password defaults to "password", but can/should be changed.
+
+The "joe@somewhere.edu" is always the mail address of the maintainer.  Note
+that this has to match what was specified on the command line of
+"createlist" when the list was created.
+
+Note that the X-Command: field has to be part of the header, when it's
+in the body of the mail, it has no effect.
+
+Anytime an X-Command: mail has been processed, the results will be
+mailed back to the maintainer of the list, and the X-Command: field
+will have been renamed to X-Processed:.
+
+Although this remote-facility is convenient, some might argue that it
+presents a security hole.  Well, in order to make this hole as small as
+possible, you can keep the password secret.  Also, the exact mailaddress
+of the maintainer might not be publicly known.	You can simply change
+the X-Command field into something else like X-MyCommand.  Above all, since
+faking mail is a well known possibility it would be ridiculous to take
+more precautions than these.  Besides, if someone indeed manages to sneak in
+a bogus X-Command:, it will never go unnoticed since the mailing list
+maintainer (and only the maintainer) will always receive the X-Processed:
+mail.
+
+For your convenience, a sample script "doxcommand" is present in the
+SmartList/examples directory.  It can be used to easily generate these
+X-Command mails.  Do remember to read-protect this script once the password
+has been changed.
+
+
+3. Customisation
+   -------------
+
+The mailinglists can be customised in several ways:
+
+- For all the lists:
+	- Since all the lists initially share the same help.txt, subscribe.txt,
+	  unsubscribe.txt, rc.init, rc.submit and rc.request files
+	  (hardlinked), any change to them will affect all lists.
+	- Since all the lists have the .bin directory in their PATH, any
+	  change to one of the Bourne shell scripts in there will affect
+	  them all.
+- Per list:
+	- Every list directory contains an "rc.custom" rcfile which can
+	  be edited to your hearts content to customise certain parameters
+	  for this list only.
+	- Small local customisations can be realised by uncommenting one
+	  or more of the RC_LOCAL_* assignments in rc.custom.
+	  You then have to create the appropriate rc.local* file in which
+	  you can put any commands you'd like (e.g. adding a general signature
+	  or disclaimer to every outgoing submission).
+	- For graver customisation you can remove the hardlink (using
+	  .bin/delink for example) to any of the files in a list directory and
+	  provide that list with its own copy in order to edit that to taste.
+	- Since the current directory is in the PATH before the .bin
+	  directory you can create per-list copies of any of the Bourne shell
+	  scripts in .bin which can then be changed without affecting the
+	  other lists.
+- Per group of lists:
+	- The same applies as when customising per list, but you should
+	  then hardlink the appropriate files among the group of list
+	  directories.
+
+By default the scripts create and use hardlinks in various places.  You are
+completely free to change some or all into symbolic links instead (or
+substitute "ln" with "ln -s" in some scripts).
+Some editors have a habit of moving the file you were editing to a backup
+name and writing out a new copy in its place.  This can cause problems if
+the editor is unaware of the symbolic or hard links in place.  You should
+make sure that the editor is aware of the link and preserves it, even after
+the file has been edited (for people using emacs: try setting
+backup-by-copying-when-linked to true).
+By using the "led" script instead of calling your editor directly you
+will be timely warned of anything your editor broke.
+
+If you are not using the remote-maintenance facility and you start editing
+or customising scripts/files by hand, then you should make sure that there
+doesn't arrive any mail to those lists that are affected by your changes.
+The best way to do this is by using the command "led" whenever you want
+to edit a SmartList governed file.  Led will take care of all the necessary
+locking for any file, led can also be used to edit non-SmartList files.
+
+If you don't use "led" but still would like to put incoming mails on hold
+temporarily, then you can do this:
+
+- for all the lists by creating the file:	.etc/rc.lock
+- only for one list by creating the file:	rc.lock
+  in the list directory of that list.
+
+The .bin/flist command checks to see if these rc.lock files exist AND are
+not older than 17 minutes before delivering the mail.  So, if you create
+an rc.lock file, mails to that (or all) lists will stall for the next
+17 minutes.  If you need more time, touch the file every so often.
+You should remove the rc.lock files again after finishing your editing.
+
+If you would like to change the -dist alias (used to distribute the
+mail to the subscribers) into something less well known, go right ahead,
+but remember to change the corresponding assignment to listdist.  For
+completeness sake one should also correct the createlist and removelist
+scripts in that case.  If you are using choplist to expand the dist-file,
+then you don't even need a -dist alias at all.
+
+
+3a.Digest processing
+   -----------------
+
+You can configure a list to send out digests of accumulated submissions.
+In order to do so, simply uncomment the appropriate assignment to
+digest_flag in rc.init (if you want all lists to be digested) or rc.custom
+(if you only want this list to be digested).  Digests are then sent out
+every so often depending on size and age of the accumulated messages.
+
+The conditions for sending out a digest are checked during the arrival
+of every submission.  If, however, traffic on the list sometimes is very low
+(i.e. less often than the maximum age of a digest) a digest could be laying
+around for longer than the specified maximum period (3 days by default).
+
+In order to make sure that the digest gets sent out anyway, you should be
+running the .bin/cronlist program every so often.  The recommended
+procedure is to create a cron job (under the list account) that contains
+something like the following entry:
+
+0 6 * * * /home/slist/.bin/cronlist
+
+The cronlist script can be customised to taste (maybe you'll need to
+adjust the setting of the PATH variable).
+Beware: call cronlist with an absolute or relative path, do not rely on
+PATH to find it for you (cronlist uses $0 to find the location of the
+lists it is responsible for).
+
+By default, cronlist will run the flush_digests program.
+By using the above listed crontab entry, you will ensure that at six o'clock
+in the morning all the overdue digests will be sent out.
+
+Flush_digests normally checks the age of the digest and does not send it
+out until it is overdue.  If you want to force flush_digests to send out
+a digest of a particular list, you can create the file ".digest.force" in
+that list's directory.	During the next run of flush_digests, it will
+remove .digest.force and push out the digest (if any) regardless of its age.
+
+If you create a file named digest.admin in either the main directory of
+the digested list or in the archive/latest directory belonging to it, it
+will be picked up by the next flush_digests and included up front to the
+actual digest under the heading "Administrivia".
+The archive/latest/digest.admin file digested list will be automatically
+removed after the digest has been pushed out.
+The digest.admin file in the main directory of the digested list will not be
+removed and is included in every digest.
+
+If you want to give your subscribers the choice of receiving digests or not.
+This is what you can do:
+
+	Create two lists.  E.g. if your list would be called "thelist", then
+	you have the `real' list called "thelist" (created and used like
+	a regular list) and the `digested' list called "thelist-d".
+
+	In the distfile of thelist you should include thelist-d as one of
+	the subscribers.  In the rc.custom file of thelist-d you should
+	edit the assignment to undigested_list to read
+	"undigested_list =	thelist@$domain".
+
+	After you've done this, you're all set.	 People that want digests
+	simply subscribe to thelist-d and people that don't, subscribe to
+	thelist.
+
+
+3b.Restricting subscriptions
+   -------------------------
+
+There are three ways in which you can restrict who can subscribe to a list:
+- You can put the addresses of unwanted subscribers on the so-called reject-
+  list (the `reject'-file).
+- You can create a program (e.g. a shell script) called "subscreen".  It must
+  be executable and will receive the mail address of the prospective subscriber
+  as the first argument.  If subscription for that address is allowed, the
+  program must return with exitcode zero.  If subscription is disallowed,
+  simply return with exitcode one.  A sample program is provided in the
+  examples directory.
+- You can completely disable automatic subscription by uncommenting the
+  appropriate "auto_subscribe" line in rc.custom.
+- You can completely disable automatic unsubscription by uncommenting the
+  appropriate "auto_unsubscribe" line in rc.custom.
+
+
+3c.Restricting submissions
+   -----------------------
+
+You can restrict submissions to people on the accept-list (the `accept'-file).
+Mail from anyone else will be passed on to the maintainer instead of being
+submitted.  To enable this you have to uncomment the appropriate
+"foreign_submit" line in rc.custom.  By default the accept file is hardlinked
+to the dist file (i.e. if submissions are restricted, only subscribers
+can do so).  If you want to allow only an even more select group, delink the
+accept file and edit it to taste.  If you'd like to have both the dynamic
+accept file and a static one, create a new file "accept2", it will be
+searched in addition to the regular accept file.
+
+Beware that using an accept file is incompatible with having an owner- alias
+for this list (procmail administered lists do not need the owner- alias
+anyway, so if you've never heard of such a thing, ignore this warning).
+
+If, in addition to notifying the maintainer you want an automated reply
+to be generated to the submitter which was not in the accept file, then you
+can accomplish this by simply creating an accept.txt file.  Its contents
+will (like the contents of the help.txt file) be returned to the submitter.
+
+This feature is not the same as a moderated list, the two features can be
+used accumulatively.
+
+On a related note, SmartList, by default, tries to identify administrative
+requests that got mailed to the submission address instead of the -request
+address and diverts them to the -request address.  If for some reason this
+is undesirable, you can uncomment the appropriate "divertcheck" variable
+assignment in rc.custom to disable this feature.
+
+
+3d.Auto subscription on first submission
+   -------------------------------------
+
+Instead of rejecting submissions by people not on the accept (dist) list,
+you can enable "force_subscribe".  This will cause people submitting
+mails to the list to be autosubscribed to the list if they were not in the
+dist file.
+
+
+3e.Autosending files to new subscribers
+   ------------------------------------
+
+You can create a file named "subscribe.files".	It can contain any
+number of archive-server commands.  The results (i.e. the files requested)
+will be sent to the new subscriber.
+
+
+3f.Moderated lists
+   ---------------
+
+First create a file named "moderators", it should contain the fully
+qualified mail addresses of all the moderators for this list (i.e. just
+local usernames are not sufficient, at least include an @host or host! ).
+Then uncomment the appropriate "moderated_flag" line in rc.custom.
+
+From then on all mail that does not contain an
+"Approved: the_address_of_one_of_the_moderators" field is forwarded to
+all the moderators.
+
+One of the moderators should then resend the mail to the list after adding
+an "Approved: his_own_address" field to the header (and possible editing
+the contents of the mail).  It will be no problem if several moderators
+resubmit the same submission concurrently, since the mailinglist will
+filter out duplicates anyway (i.e. only the first one will go out and
+be archived).
+
+
+3g.List of lists
+   -------------
+
+If you want people to be able to get an overview of which lists are
+publicly available at your site, you can have your listmaintainers create
+a file called "info.txt" in their respective list directory.  This info.txt
+file should contain a short description of the purpose and main topic of
+this particular list.
+
+You can then setup a command like examples/gatherinfo in crontab to collect
+all these various info.txt files once a day.
+
+The thus gathered info.txt files can be placed in a directory which can
+be accessed by a gopher or ftp server, or, you can put them into the
+archive directory of a procmail-managed mail-archive server (e.g. under
+the mail-alias "metalist").
+
+
+3h.Positively discriminate certain daemons
+   ---------------------------------------
+
+SmartList usually does not accept submissions or subscriptions from daemons.
+If you'd like to make an exception for some, you can do this by tuning
+the daemon_bias variable.  A sample template can be found in the rc.init
+file.  This variable can of course be set in the rc.init, rc.custom or
+rc.local files.	 Instead of directly specifying a weight and a regexp, you
+can just specify a weight.  You'll then have to make sure that the variable
+is set only when mail from your special daemons arrives.
+
+Beware that if you change this for a list that has a digested shadowlist,
+you change it for the digested version as well.
+
+
+3i.Default help text replies
+   -------------------------
+
+By uncommenting the appropriate "auto_help" line in the rc.custom file the
+list will respond to every undecipherable request message as if it requested
+help.  Messages that will still get through to the maintainer are those:
+- that seem to come from a daemon.
+- which look like a reply.
+
+Depending on the typical audience you have on the list, enabling this might
+not be a good idea.
+
+
+3j.Unsubscribe assistance
+   ----------------------
+
+By uncommenting the appropriate "unsub_assist" line in the rc.custom file
+you can turn on the unsubscribe assistance.  If the someone is trying to
+unsubscribe from the list, but his mailaddress could not be found, he
+will receive back a number of multigram matches (determined by the value
+of unsub_assist) between his unsubscribe message and the dist file.
+
+If you'd like to enable this feature, please keep the following points
+in mind:
+- People can get excerpts of the dist file this way.
+- Malevolent individuals might become encouraged to unsubscribe lots
+  of people from your list.  This will not go by unnoticed, of course.
+  It will be logged and the innocent subscribers will receive a copy
+  of the unsubscribe request they didn't send.	Nevertheless, it can cause
+  considerable inconvenience.
+
+
+3k.Exploding other (non-SmartList) lists
+   -------------------------------------
+
+A SmartList list can easily be used to function as a local exploder for
+a larger mailinglist.  The advantages over using a regular alias are
+threefold:
+- (Un)subscription is handled automatically.
+- Bounce messages go to the local exploder list (instead of the larger
+  mailinglist which really is not interested in your mail problems with
+  some local aliases).
+- Misdirected administrative requests are filtered out of the regular
+  submission channel.
+
+If the larger mailinglist you are exploding locally is a SmartList list
+as well, then there are no special precautions to take at all.
+If the larger mailinglist is not managed by SmartList, misdirected
+administrative requests will be caught *and* handled by the local list;
+if this "handling" turns out to be a problem you can turn it off
+by uncommenting the appropriate "pass_diverts" variable in rc.custom
+(this will cause misdirected administrative requests to be caught but
+then passed on to the maintainer verbatim).
+
+
+3l.Making the subscriber list public
+   ---------------------------------
+
+If you want anyone to be able to retrieve the list of current subscribers
+to a list, simply make a link from the dist file to archive/subscribers.
+This enables anyone to send in a request to the archive server retrieving
+the file "subscribers".
+
+
+3m.Schematic overview of what goes on behind the scenes
+   ----------------------------------------------------
+
+Suppose you have two entries in the aliases file, one for thelist@domain
+and one for thelist-request@domain.
+
+Whenever mail arrives for either address, the following happens:
+	- flist is started suid root with thelist as its argument
+		- changes its current directory to that of the (internally
+		  hardcoded) main list directory
+		- changes its uid and gid to that of the (internally
+		  hardcoded) list account
+		- changes its current directory to that of thelist
+		- waits until both ../.etc/rc.lock and rc.lock are gone or
+		  are old enough (17 minutes)
+
+Then, if it was a regular submission to thelist@domain:
+	- flist execs procmail with rcfile rc.submit
+		- pulls in rc.init that sets up the defaults
+		- pulls in rc.custom that overrides some defaults (if any)
+		- checks the submission format
+			- if needed it now checks:
+				- the accept list
+				- the moderators list (Approved:)
+			- checks the msgid cache for duplicate submissions
+			- if needed does digest processing (and stop)
+		- archives the mail
+		- munges the header of the mail to taste
+		- fires off sendmail to send the mail to thelist-dist@domain
+	- If the mail was an administrative request, it does not get
+	  passed on to the list, instead, procmail pulls in rc.request
+
+But, if it was an administrative mail for thelist-request@domain:
+	- flist execs procmail with rcfile rc.request
+		- pulls in rc.init that sets up the defaults
+		- pulls in rc.custom that overrides some defaults (if any)
+		- performs the necessary actions, depending on the content
+		- if the content was undecipherable, it gets passed on to
+		  the maintainer of thelist
+
+If there are grave system failures during all this, the catch-all script
+rc.post will kick in and make sure that the mail is stashed away somewhere
+or forwarded to the maintainer, whatever works.	 This to ensure that no
+mail gets lost.
+
+
+4. The archive server
+   ------------------
+
+All mail (except mail being forwarded from another mailinglist) sent to any
+of the lists is archived.  The archiving is fairly straightforward.
+E.g. if you have a list called "scuba", then all submissions are archived
+in scuba/archive/latest/.  The mails will be stored one-mail-per-file each.
+The files will be numbered.
+
+Now, normally, only the last two mails will be kept around, the others
+are periodically removed.  This in order to keep down the archiving costs
+for people with limited diskspace.  To change the size of the archive-history
+edit the rc.custom file.  To get more sophisticated archiving, like grouping
+submissions monthly, you should either create a cron job or edit the
+.bin/arch_trunc file.
+
+The archive server can be accessed per mailinglist by sending mail
+to the -request address with the following Subject:
+
+	Subject: archive
+
+The body of the mail or the rest of the subject line can then be
+filed with requests to the archive server.  It basically understands
+five commands:
+
+	get file ...
+	ls directory ...
+	egrep case_insensitive_regular_expression file ...
+	maxfiles nnn
+	help
+
+The archive server does a thorough check on the commands and the files
+that are requested.  This to ensure that it does not access any files
+outside the "scuba/archive" directory.	Any text-file that you put in
+the "scuba/archive" directory (or any of its subdirectories) can now be
+retrieved by the archive commands.
+
+If a file requested via the archive server starts with a header that begins
+with `Content-Type:', then the file is sent out as is, without encapsulation.
+This allows you to prepare the files in special formats that are directly
+supported by the recipient's mailuser agent.  The leading Content-Type: and
+any immediately following fields will become part of the header.
+
+All other files are MIME-encapsulated before transmission.  You should take
+a look at /home/slist/.bin/mimencap.local if you want to extend or
+customise the recognised file types.
+
+The MIME-encapsulation is automatic and depends on the availability of the
+metamail package in the PATH defined in rc.init.  The programs from this
+package which need to be available are: mimencode and splitmail.
+If mimencode is not found on the PATH, the files will be sent out with a
+standard wrapper around them.
+
+You can switch from MIME-encoding to uuencoding by applying the
+appropriate patch from .examples/uuencode.dif.
+
+If you put links in the "scuba/archive" tree, you can allow the archive
+server to retrieve files from other parts of the filesystem.
+
+The whole archive server can be found in the .bin/arch_retrieve script.
+The archive server can be extended with arbitrary commands via the
+examples/retrieve.local script that comes with the distribution.
+
+
+4a.Sending files to the archive server
+   -----------------------------------
+
+The archive server as installed with SmartList does not directly support
+the receipt and storage of files.
+What you can do is look in the at the rcfile script .examples/putfile.
+It provides you with all you'd need to receive and store files.
+
+
+4b.Restricting access to the archive server
+   ----------------------------------------
+
+You can restrict archive access to people on the accept-lists
+(the `accept' and `accept2'-file).  Mail from anyone else will be passed on
+to the maintainer instead of being passed to the archive server.  To enable
+this you have to uncomment the appropriate "restrict_archive" line in
+rc.custom.
+
+
+5. The format of the dist file
+   ---------------------------
+
+You do not need to know this, unless you edit the dist file by hand or want
+to incorporate an existing list of addresses.
+
+In order to distribute incoming submissions the dist file is fed to sendmail
+with the regular :include: alias.  So the format of this file must
+be in accordance with what sendmail would expect.  In addition to that
+this file is searched and edited by multigram in order to find particular
+subscribers.  The format which multigram expects is a bit more rigid than
+what sendmail allows.
+
+The following conditions apply:
+- One subscriber per line.
+- Empty lines are allowed.
+- The mail address of the subscriber must be the first word on the line.
+- Comments may follow the address (but separated from the address by
+  at least one whitespace character).
+- Everything preceding the line containing:
+	(Only addresses below this line can be automatically removed)
+  is write protected from changes by multigram (i.e. these addresses can
+  never be automatically/accidentally unsubscribed).
+- If the line:
+	(Only addresses below this line can be automatically removed)
+  is not present at all, automatic unsubscriptions to this list are impossible.
+- Whenever multigram automatically removes an address from the list, it
+  rewrites the dist file `in situ'.  This means that the dist file will be
+  contracted at that point.  I choose to write in situ in order to avoid
+  copying the dist file every time it changes (a real life saver if the
+  list grows too big).
+- Multigram always adds new subscribers on the line immediately following the
+  last filled entry in the dist file.
+
+Some sample entries (the preferred format):
+	joe@some.where
+	joe@some.where (some comment)
+	joe@some.where (some comment) (some more comments)
+
+Deprecated, but allowed:
+	<joe@some.where>
+	<joe@some.where> some comment
+	<joe@some.where> (some comment)
+
+Not allowed by multigram (although sendmail doesn't mind):
+	(some comment) joe@some.where
+	some comment <joe@some.where>
+
+
+6. Multigram and the thresholds in rc.init/rc.custom
+   -------------------------------------------------
+
+The rc.init and rc.custom scripts define some threshold values:
+
+	match_threshold, off_threshold, reject_threshold, submit_threshold.
+
+These values are fed to multigram as a cut-off value with which to decide
+if a certain mail address is on a list.
+The higher the threshold, the better the match must be.	 The thresholds
+have a scale from -16383 to 32766.  This means that, for instance a threshold
+of 30730 can be used to find only mailaddresses that are almost verbatim
+on the list.  A value of 24476 on the other hand allows for some error
+(like mailaddresses munged by gateways etc.) in finding matches to the
+list.
+
+The values 30730 and 24476 are somewhat arbitrary values which seem
+to work well for the particular problems at hand.
+
+To get a feeling for the values computed by multigram you can do
+the following test:
+
+	Create a file with the same format as the distfile, fill it with
+	any number of addresses you like (e.g. you could take an existing
+	distfile).
+	Now make a copy of this `distfile' and alter some of the addresses
+	a bit (like omit one character, or add some gateway information,
+	switch two words, change it into an uucp address, etc.).
+	Next you should call up multigram with the following command line:
+
+		multigram -l-16000 -b300 pseudo_distfile <altered_distfile
+
+	Multigram will display up the 300 best matches it found after
+	crossreferencing altered_distfile and pseudo_distfile.
+	The output produced by multigram can be disected as follows:
+
+		lineno. name1 goodness name2
+
+	Lineno. and name1 refer to the line number in pseudo_distfile which
+	contains the mailaddress name1.	 Goodness is the metric that
+	corresponds to the aforementioned threshold values, and name2 is
+	the matching mailaddress from altered_distfile (which is usually
+	the incoming mail).
+
+	Once you get the hang of it you can play around a bit with the
+	entries in altered_distfile by mutilating them more and more in
+	order to see what multigram makes of it (try inserting some non-
+	existing addresses as well).
+
+
+7. Choplist & sendmail
+   -------------------
+
+There are two ways of distributing the message to the addresses listed
+in the dist file: either directly through sendmail and the :include:
+alias expansion, or indirectly, through choplist which does the
+expansion itself and calls up sendmail on suitable chunks.
+
+By default, choplist takes care of the expansion, uncomment the appropriate
+alt_sendmail environment variable in rc.init to revert to standard sendmail
+expansion.
+
+Choplist tries to make sure that even for big lists, the alias expansion
+goes as swiftly as possible and several sendmails will be delivering the
+mail to the subscribers concurrently.  The various limits that can be
+imposed on this process can be tuned in the rc.init file.
+
+Most sendmails will do a worse job without choplist as a preprocessor.
+
+A side effect of using choplist as a preprocessor is that there is no need for
+a -dist alias anymore.
+
+
+8. FTP addresses & the SmartList mailinglist
+   -----------------------------------------
+
+The latest version can be obtained directly from:
+
+	http://www.procmail.org/
+or	ftp://ftp.procmail.org/pub/procmail/
+
+There exists a dedicated mailinglist for SmartList users, send your
+subscription requests to:
+
+		SmartList-users-request@procmail.org
+
+For procmail related questions not specific to the SmartList package
+you can also write to the procmail mailinglist, send your subscription
+requests to:
+
+		procmail-users-request@procmail.org
+
+There is a readonly announcement list to stay informed about new versions
+and official patches of both procmail & SmartList, send your subscription
+requests to:
+
+		procmail-announce-request@procmail.org
+		SmartList-announce-request@procmail.org
+
+
+9. The FAQ
+   -------
+
+If you have questions not answered by the above you should check the
+FAQ at:
+	http://www.hartzler.net/smartlist/
+
+This FAQ was created and is maintained by various members of the
+SmartList community, most particularly
+
+	jason@mindwell.com
+	Werner Reisberger <werner@pure.ch>
+	Peter Hartzler <ph@eainet.com>
+
+Suggestions for the FAQ should be sent to <sl-faq@hartzler.net>.

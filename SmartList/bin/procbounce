@@ -1,0 +1,143 @@
+#! /bin/sh
+:
+# Copyright (c) 1993-1999, S.R. van den Berg, The Netherlands
+# Copyright (c) 1999-2000, Philip Guenther, The United States of America
+#$Id: procbounce,v 1.38 2000/05/09 06:36:32 guenther Exp $
+
+test=test		# /bin/test
+echo=echo		# /bin/echo
+cat=cat			# /bin/cat
+mkdir=mkdir		# /bin/mkdir
+sed=sed			# /bin/sed
+ls=ls			# /bin/ls
+rm=rm			# /bin/rm
+expr=expr		# /bin/expr
+date=date		# /bin/date
+formail=formail		# /usr/local/bin/formail
+multigram=multigram	# ../SedBinDir/multigram
+idhash=idhash		# ../SedBinDir/idhash
+
+$test -z "$listaddr" &&
+ $echo "Don't start this script directly, it is used in rc.request" && exit 64
+
+tmpfrom=tmp.from
+tmprequest=tmp.request
+dist=dist
+bounces=bounces
+
+$test -d $bounces || $mkdir $bounces
+
+$formail -1 -kdem4 -xSubject: <$tmprequest -s |
+ $sed -e '/^[0-4][0-9][0-9] /d' -e '/^[	 *]*Message-[Ii][Dd]:/d' \
+  -e '/^[	 *]*To:/d' -e '/will retry/,/^[	 ]*$/d' \
+  -e '/^Xsucceed:/d' \
+  -e '/^The mail system at .* unable to deliver/,/^-* Message Log Follows -/d'\
+  -e '/ent successfully/,/^[	 ]*$/d' \
+  -e '/^Content-Type:.*message.rfc822/q' \
+  -e 's/^\([^	 ]*\) @ /\1@/' >$tmpfrom
+
+addr=''
+
+# Special processing for DSNs
+if $test ".$isadsn" = .yes
+then
+   # Accept any number of 'exact' matches on Original-Receipient: lines
+   addr=`$sed -n \
+    -e 's/^Original-[Rr]ecipient:.*[Rr][Ff][Cc]822;//p' <$tmprequest |
+    $multigram -l$match_threshold -x$listaddr -x$listreq $dist`
+
+   # Accept just one close match on Final-Receipient: lines
+   test -z "$addr" &&
+    addr=`$sed -n \
+     -e 's/^Final-[Rr]ecipient:.*[Rr][Ff][Cc]822;//p' <$tmprequest |
+     $multigram -b1 -l$off_threshold -x$listaddr -x$listreq $dist`
+
+   # Ditto for X-Actual-Recipient: lines
+   test -z "$addr" &&
+    addr=`$sed -n \
+     -e 's/^X-[Aa]ctual-[Rr]ecipient:.*[Rr][Ff][Cc]822;//p' <$tmprequest |
+     $multigram -b1 -l$off_threshold -x$listaddr -x$listreq $dist`
+fi
+
+test -z "$addr" &&
+ addr=`sed -n -e '/^5[0-9][0-9] /p' <$tmpfrom |
+      $multigram -b1 -l$off_threshold -x$listaddr -x$listreq $dist`
+
+test -z "$addr" &&
+ addr=`$multigram -b1 -l$off_threshold -x$listaddr -x$listreq $dist <$tmpfrom`
+
+test -z "$addr" &&
+ addr=`$multigram -i -b1 -l16384 -x$domain $dist <$tmpfrom`
+
+$test -z "$addr" &&
+ addr=`$formail -1 +1 -dem4 -XReceived: -uReceived: <$tmprequest -s |
+  $multigram -i -b1 -l16384 -x$domain $dist `
+
+if $test ! -z "$addr"
+then
+  addr=`$expr "X $addr" : 'X.* \([^ ]*\)$' `
+  serial=`$formail +1 -1 -m4 -zdexMessage-Id: -s $idhash <$tmprequest`
+  case "X$serial" in
+     X|X0) set dummy `LANG='' LC_TIME='' LC_ALL='' \
+	    $date +'%y %m %d' 2>/dev/null`
+	serial=$3$4$2 ;;
+  esac
+  $echo "$addr" >>$bounces/$serial
+  $rm -f _dummy_ `$ls -td $bounces/* | $sed -e '1,'$maxhist' d' `
+
+  bounced=0
+  for a in $bounces/*
+  do
+    $test -f "$a" &&
+     $echo "From $addr" | $multigram -b1 -l$match_threshold $a >/dev/null &&
+     bounced=`$expr $bounced + 1`
+  done
+
+  addfield="X-Diagnostic: Mail to $addr bounced $bounced times"
+  if $expr $bounced \>= $minbounce >/dev/null
+  then
+     fieldcontent=`
+	if echo "From $addr" |
+	 $multigram -b1 -l$auto_off_threshold -d $dist 2>/dev/null
+	then
+	:
+	else
+	   $echo 'Not confident enough to autoremove the offending address'
+	   $echo "From $addr" | $multigram -b2 -l0 $dist
+	fi | $sed -e '/^Removed:/ d' \
+	 -e '1 s/^ *[0-9]* \([^ ]* *[0-9]*\).*$/Removed: \1/' \
+	  -e 's/^ *[0-9]/	/'`
+     if realaddr=`$expr "X$fieldcontent" : 'XRemoved: \([^ ]*\)'`
+     then
+	$test ! -z "$subscribe_log" &&
+	 $echo "procbounce: $fieldcontent" >>$subscribe_log
+	( $cat <<HERE
+To: $realaddr
+From: $listreq
+Subject: You have been removed from the list
+X-Loop: $listaddr (bounce)
+X-Loop: $listaddr
+Precedence: junk
+
+Your mail address $realaddr has been removed
+from the $listaddr mailinglist.
+It generated an excessive amount of bounced mails.
+
+Before sending in a subscription request to
+$listreq again, please ensure that
+this problem has been resolved.	 When in doubt, ask your system
+administrator or send mail to "postmaster".
+
+The last one of those bounced mails has been quoted below:
+HERE
+	  $sed -e 's/^/>/' $tmprequest
+	) | $SENDMAIL $sendmailOPT "$realaddr"
+     fi
+     addfield="$addfield
+X-Diagnostic: Bounces exceed threshold of $minbounce
+X-Diagnostic: $fieldcontent"
+  fi
+  $formail -A "$addfield"
+else
+  $cat
+fi

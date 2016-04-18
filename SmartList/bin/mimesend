@@ -1,0 +1,84 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh "$0" $argv:q # we're in a csh, feed myself to sh
+$O || exec /bin/sh "$0" "$@"		  # we're in a buggy zsh
+#########################################################################
+#	mimesend	Sends a MIME encapsulated file			#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: mimesend,v 1.16 1995/03/20 14:50:17 berg Exp $
+
+echo=echo		# /bin/echo
+test=test		# /bin/test
+rm=rm			# /bin/rm
+cat=cat			# /bin/cat
+sed=sed			# /bin/sed
+dirname=dirname		# /bin/dirname
+basename=basename	# /bin/basename
+splitmail=splitmail	# /usr/local/bin/splitmail	# MIME metamail package
+mimencode=mimencode	# /usr/local/bin/mimencode	# MIME metamail package
+formail=formail		# /usr/local/bin/formail
+procmail=procmail	# /usr/local/bin/procmail
+
+$test 1 != $# && $echo "Usage: mimesend filename" 1>&2 &&
+ exit 64
+
+$test -z "$archivedir" &&
+ $echo "mimesend: Certain environment variables need to be set" 1>&2 && exit 64
+
+TMPF=/tmp/ms$$.
+trap "$rm -f \$TMPF*; exit 1" 1 2 3 13 15
+$rm -f $TMPF*
+
+filename=$1
+
+name="`$basename $filename`"
+dir="`$dirname $filename`"
+
+export name dir filename archivedir mimencode formail sed	# for mimencap
+
+( $formail -rt -I"Subject: archive retrieval: $1" \
+   -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+   -i"Content-ID: <\"$filename\"%$listreq>" \
+   -I"Precedence: bulk" -X "" <$tmprequest
+  $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+  cd $archivedir
+  if $test -r "./$filename" -a ! -d "./$filename"
+  then
+     case "`sed -e 1q <\"./$filename\"`" in
+	Content-[Tt]ype:*) $cat "./$filename" ;;
+	*) echo "" ; $decode "./$filename" ;;
+     esac
+  else
+     $echo "MIME-Version: 1.0"
+     $echo "Content-Type: text/plain"
+     $echo ""
+     if $test -d "./$filename"
+     then
+	$echo "$filename is a directory, use 'ls' instead."
+     else
+	$echo "File $filename is currently not available."
+	$echo "N.B. Filenames are case sensitive!"
+     fi
+  fi
+) | $procmail -pm SHELL=$SHELL ./../SedBinDir/mimencap | $splitmail -p $TMPF
+
+set dummy $TMPF*
+shift
+
+if $test $# = 1
+then
+  $SENDMAIL $sendmailOPT $sendmailOPTq -t <$1
+else
+  for a in "$@"
+  do
+     $formail -fb -A"X-Loop: $listaddr" -I"Precedence: bulk" \
+ -a"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+	<"$a" |
+      $SENDMAIL $sendmailOPT $sendmailOPTq -t
+     $rm -f "$a"
+  done
+fi
+
+$rm -f $TMPF*

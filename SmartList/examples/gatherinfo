@@ -1,0 +1,58 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh "$0" $argv:q # we're in a csh, feed myself to sh
+$O || exec /bin/sh "$0" "$@"		  # we're in a buggy zsh
+#########################################################################
+#	gatherinfo	To collect the e.g. info.txt files from various #
+#			mailinglists					#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: gatherinfo,v 1.3 1994/05/26 14:11:46 berg Exp $
+
+test=test		# /bin/test
+ln=ln			# /bin/ln
+rm=rm			# /bin/rm
+cp=cp			# /bin/cp
+echo=echo		# /bin/echo
+
+getfile="$ln -s"
+
+filename="$1"
+maindir="$2"
+targetdir="$3"
+
+$test $# != 3 -o ! -d "$maindir" -o ! -d "$targetdir" &&
+ $echo "Usage: gatherinfo filename main-listdirectory targetdirectory" 1>&2 &&
+ exit 64
+
+set dummy `cd "$targetdir"; echo *`
+shift
+
+for a in "$@"
+do
+  from="$maindir/$a/$filename"
+  to="$targetdir/$a"
+  $test ! -d "$to" -a ! -f "$from" && $rm -f "$to"
+done
+
+set dummy `cd "$maindir"; echo *`
+shift
+
+for a in "$@"
+do
+  from="$maindir/$a/$filename"
+  to="$targetdir/$a"
+  if $test -f "$from"
+  then
+     if $test -f "$to"
+     then
+	case "$getfile" in
+	   *ln*|*link*) ;;
+	   *) $rm -f "$to"
+	      $getfile "$from" "$to" ;;
+	esac
+     else
+	$getfile "$from" "$to"
+     fi
+  fi
+done

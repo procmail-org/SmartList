@@ -1,0 +1,38 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh install.sh2  # we're in a csh, feed myself to sh
+$O || exec /bin/sh install.sh2		  # we're in a buggy zsh
+#$Id: install.sh2,v 1.14 1999/01/20 17:58:15 guenther Exp $
+
+test -z "$bindir" && echo "Call install.sh instead" && exit 64
+
+/bin/rm -f targetdir.tmp
+
+cd ../src
+$MAKE getparams gethome <&4 || exit 1
+cd ../SmartList
+
+ltarget=`../src/gethome "$listid" "$target"` || exit 1
+
+case "X$ltarget" in
+   X/*) homedir=$ltarget ;;
+   X)  homedir='$HOME' ;;
+   X*) homedir="\$HOME/$ltarget" ;;
+esac
+echo "Hardwiring '$homedir' as the list directory owned by '$listid'."
+
+echo "homedir='$homedir'" >>targetdir.tmp	# pass it on to install.sh3
+
+hfile=targetdir.h
+
+cat >$hfile <<HERE
+#define TARGETDIR	"$ltarget"
+#define LISTID		"$listid"
+#define PROCMAIL	"../$bindir/procmail"
+#define INIT_PATH	"PATH=../$bindir"
+HERE
+
+cmp $hfile ../src/$hfile 2>/dev/null 1>&2 || cp $hfile ../src/$hfile
+
+cd ../src
+$MAKE multigram <&4 || exit 1
+cd ../SmartList

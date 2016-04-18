@@ -1,0 +1,68 @@
+# procmail rcfile
+#########################################################################
+#	mimencap	Encapsulates a file in the necessary MIME	#
+#			wrapper						#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: mimencap,v 1.12 1994/09/22 17:13:06 berg Exp $
+
+DEFAULT=|
+
+oldshellmetas="$SHELLMETAS" SHELLMETAS
+
+:0 fhw
+| $formail -fb -a "Content-Disposition: inline; filename=\"$filename\"" \
+   -I "Content-Length: 0000000000"
+
+SHELLMETAS="$oldshellmetas" oldshellmetas
+
+:0
+* ^Content-Type:
+|
+
+INCLUDERC=../.bin/mimencap.local
+
+:0
+* !^Content-Transfer-Encoding:
+{
+  :0 B
+  * [^- -~-]
+  {
+    :0 B
+    * [^- -~-][^- -~-][^- -~-][^- -~-][^- -~-]\
+       [^- -~-][^- -~-][^- -~-]
+    {
+      :0 wfbr
+      | $mimencode -b
+
+      :0 wfh
+      | $formail -fb -I "MIME-Version: 1.0" \
+	 -a "Content-Type: application/octet-stream" \
+	 -I "Content-Transfer-Encoding: base64" | \
+	$sed -e 's"^\(Content-Type: .*\)$"\1;\
+	directory=\"'$dir'\"; name=\"'$name'\""'
+
+      :0
+      |
+    }
+
+    :0 wfbr
+    | $mimencode -q
+
+    :0 wfh
+    | $formail -fb -I "MIME-Version: 1.0" \
+       -a "Content-Type: application/octet-stream" \
+       -I "Content-Transfer-Encoding: quoted-printable" | \
+      $sed -e 's"^\(Content-Type: .*\)$"\1;\
+	directory=\"'$dir'\"; name=\"'$name'\""'
+
+    :0
+    |
+  }
+}
+
+:0 wfh
+| $formail -fb -a "MIME-Version: 1.0" -a "Content-Type: text/plain" | \
+  $sed -e 's"^\(Content-Type: .*\)$"\1;\
+	directory=\"'$dir'\"; name=\"'$name'\""'

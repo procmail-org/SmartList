@@ -1,0 +1,167 @@
+#! /bin/sh
+set -x
+: &&O='cd .' || exec /bin/sh "$0" $argv:q # we're in a csh, feed myself to sh
+$O || exec /bin/sh "$0" "$@"		  # we're in a buggy zsh
+#########################################################################
+#	led		A wrapper for the editor, if it is told to edit #
+#			a SmartList governed file, it will employ all	#
+#			the appropriate locking mechanisms.		#
+#			In addition it warns if the editor touches the	#
+#			file's attributes.				#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: led,v 1.8 1995/11/14 04:27:25 srb Exp $
+
+test=test				# /bin/test
+touch=touch				# /bin/touch
+rm=rm					# /bin/rm
+ls=ls					# /bin/ls
+echo=echo				# /bin/echo
+kill=kill				# /bin/kill
+sleep=sleep				# /bin/sleep
+chmod=chmod				# /bin/chmod
+basename=basename			# /bin/basename
+dirname=dirname				# /bin/dirname
+lockfile=lockfile			# /usr/local/bin/lockfile
+
+test -z "$VISUAL" && VISUAL=$EDITOR
+test -z "$VISUAL" && VISUAL=vi
+
+if test $# = 0
+then
+  exec $VISUAL
+fi
+
+childpid=""
+lockfiles=""
+nlockfiles=""
+touchfiles=""
+
+TMPF=/tmp/led.$$
+
+trap "$test -z \"\$childpid\" || $kill -1 \$childpid 2>/dev/null
+ $rm -f $TMPF \$lockfiles; exit 1" 1 2 3 13 15
+
+$rm -f $TMPF
+$touch $TMPF
+
+for a in "$@"
+do
+  case "$a" in
+     [-+]*) ;;
+     *)
+	if lf="`$ls -ld $a 2>&1`"
+	then
+	   ( set dummy $lf
+	     $echo " $a $2 $3 $4" >>$TMPF
+	   )
+	fi
+	file=`$basename $a`
+	dir=`$dirname $a`
+	lf=""
+	tf=""
+	case "$file" in
+	   dist|dist.digest)			lf=$dir/$file.lock ;;
+	   rc.init|rc.submit|rc.request)	tf=$dir/../.etc/rc.lock ;;
+	   rc.custom|subscreen|subscribe.file|log) tf=$dir/rc.lock ;;
+	   tmp.from|tmp.request)		lf=$dir/tmp.lock ;;
+	esac
+	case "$lf" in
+	   $lockfiles|"") ;;
+	   *) lockfiles="$lockfiles $lf" ;;
+	esac
+	case "$tf" in
+	   $touchfiles|"") ;;
+	   *) touchfiles="$touchfiles $tf" ;;
+	esac ;;
+  esac
+done
+
+if $test -z "$lockfiles" || $lockfile $lockfiles
+then
+:
+else
+  $rm -f $TMPF
+  exit 1
+fi
+
+$test -z "$touchfiles" || $touch $touchfiles
+
+if $test ! -z "$lockfiles" -o ! -z "$touchfiles"
+then
+  parent=$$
+  exec 9>&2 2>/dev/null
+   ( trap 1 2 3 13 15
+     while $kill -0 $parent
+     do
+	$sleep 32
+	$chmod u+w $lockfiles
+	$touch $touchfiles $lockfiles
+	$chmod u-w $lockfiles
+     done
+   ) &
+  childpid=$!
+  exec 2>&9 9>&-
+fi
+
+$VISUAL "$@"
+( trap 1 2 3 13 15
+  exec 4<$TMPF
+  test -z "$SHELL" && SHELL=/bin/sh
+  test -z "$PS1" && PS1="$ "
+  PS1="Type 'exit' to resume checking after you have corrected it.
+$PS1"
+  export PS1
+  while read info <&4
+  do
+     set dummy $info
+     file=$2
+     info="$3 $4 $5"
+
+     set dummy `$ls -ld $file 2>&1`
+     newinfo="$2 $3 $4"
+
+     if $test "X$info" != "X$newinfo"
+     then
+	$echo "***************************************************************"
+	$echo "Your editor messed up the attributes of '$file'." 1>&2
+	$echo "I now see: '$newinfo', the way it was: '$info'." 1>&2
+	$echo 1>&2 \
+		"If you don't fix this, SmartList might not operate correctly!"
+	$echo 1>&2 \
+	    "I'll give you the opportunity to do so now (type exit when done)."
+	$echo 1>&2 ""
+	$SHELL 4>&-
+	$echo 1>&2 "Checking the rest of the files ..."
+     fi
+  done
+)
+
+exec 9>&2 2>/dev/null
+$test -z "$childpid" || $kill -1 $childpid
+wait
+exec 2>&9 9>&-
+$rm -f _dummy_ $lockfiles $TMPF
+
+trap 1 2 3 13 15
+
+if $test ! -z "$touchfiles"
+then
+  for a in $touchfiles
+  do
+     if $test -f $a
+     then
+	while $echo "Remove $a? (y/n)" 1>&2
+	   read b
+	   case "$b" in
+	      [Yy]*) $rm -f $a ; $test a = b ;;
+	      [Nn]*) $test a = b ;;
+	      *) $test a = a ;;
+	   esac
+	do
+	:
+	done
+     fi
+  done
+fi

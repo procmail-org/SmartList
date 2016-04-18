@@ -1,0 +1,227 @@
+#! /bin/sh
+: &&O='cd .' || exec /bin/sh "$0" $argv:q # we're in a csh, feed myself to sh
+$O || exec /bin/sh "$0" "$@"		  # we're in a buggy zsh
+#########################################################################
+#	createlist	To create mailinglists				#
+#									#
+#	Created by S.R. van den Berg, The Netherlands			#
+#########################################################################
+#$Id: createlist,v 1.36 2000/08/22 04:35:59 guenther Exp $
+
+defaults=.etc
+
+test=test		# /bin/test
+ln=ln			# /bin/ln
+touch=touch		# /bin/touch
+mkdir=mkdir		# /bin/mkdir
+rmdir=rmdir		# /bin/rmdir
+sed=sed			# /bin/sed
+pwd=pwd			# /bin/pwd
+cat=cat			# /bin/cat
+rm=rm			# /bin/rm
+cp=cp			# /bin/cp
+ls=ls			# /bin/ls
+chmod=chmod		# /bin/chmod
+echo=echo		# /bin/echo
+grep=grep		# /bin/grep
+lockfile=lockfile	# /usr/local/bin/lockfile
+
+bin_procmail=SedBinDir/procmail
+flist=SedBinDir/flist
+
+DEVNULL=/dev/null
+etcpasswd=/etc/passwd
+EX_USAGE=64
+EX_UNAVAILABLE=69
+
+case "$bin_procmail" in
+  SedBinDi[r]*) $echo "Please read the SmartList/INSTALL file first." 1>&2
+     $echo "You need to run install.sh to copy things into place." 1>&2
+     exit $EX_USAGE
+     ;;
+esac
+
+( exec 2>$DEVNULL; lockfile )
+if $test $? != 64
+then
+  $echo "Where is \"lockfile\"? It should be installed in your PATH" 1>&2
+  exit $EX_UNAVAILABLE
+fi
+
+if $test ! -d $defaults
+then
+  if $test -d list
+  then cd ./list
+  else cd ..
+     $test -d $defaults || cd ..
+  fi
+fi
+if $test ! -d $defaults
+then
+  $echo "createlist: You should be near the main list directory to do this" \
+   1>&2
+  exit $EX_USAGE
+fi
+
+if $test ! -f $bin_procmail
+then
+  OIFS="$IFS"
+  IFS=:"$IFS"
+  procmail=""
+
+  for a in $PATH
+  do $test -z "$procmail" -a -f "$a"/procmail && procmail=$a/procmail
+  done
+
+  IFS="$OIFS"
+  if $test -z "$procmail"
+  then
+     $echo "Where is \"procmail\"?" 1>&2
+     $echo "The symbolic link $bin_procmail must point to it" 1>&2
+     exit $EX_UNAVAILABLE
+  fi
+  $rm -f $bin_procmail
+  $ln -s $procmail $bin_procmail 2>$DEVNULL ||
+  $ln $procmail $bin_procmail 2>$DEVNULL ||
+   ( $cat >$bin_procmail <<HERE
+#! /bin/sh
+:
+exec $procmail "\$@"
+HERE
+     $chmod 0755 $bin_procmail
+   )
+fi
+
+domain=`$sed -n -e 's/^[^#]*domain= *\([^	 ]*\).*$/\1/p' \
+ $defaults/rc.init`
+
+if $test .$domain = .INSERT.YOUR.MAIL.DOMAIN.HERE
+then
+  $echo "I refuse to do anything useful until you have edited the" 1>&2
+  $echo "rc.init file.	\`domain' must be set to some sane value." 1>&2
+  exit $EX_USAGE
+fi
+
+archiveserver=no
+$test .-a = ".$1" && shift && archiveserver=yes
+
+if $test $# != 1 -a $# != 2 -o ".$1" = .-h
+then
+  $echo "Usage: createlist [-a] listname [maintainer]" 1>&2
+  $echo "	-a	create an archive server instead of a list" 1>&2
+  exit $EX_USAGE
+fi
+
+list="$1"
+maintainer="$2"
+
+case "$list" in
+  *[+*?]*) $echo "createlist: This listname contains magic characters" 1>&2
+     $echo "createlist: Support for this is planned, ask on the SmartList" 1>&2
+     $echo "createlist: mailinglist for more details" 1>&2
+     exit $EX_USAGE;;
+  "*[/	 ]*") $echo "createlist: Suspicious listname specified" 1>&2
+     exit $EX_USAGE;;
+  owner-*|*-owner)
+     $echo "createlist: Listname does not agree with sendmail" 1>&2
+     exit $EX_USAGE;;
+  *[@!]*) $echo "createlist: Specify listname without domain name appended" \
+     1>&2; exit $EX_USAGE;;
+esac
+
+if $grep -i "^$list:" $etcpasswd >$DEVNULL
+then
+  $echo "createlist: You can't pick a listname equal to an existing username" \
+   1>&2; exit $EX_USAGE
+fi
+
+umask `$sed -n -e 's/^[^#]*UMASK=[^0-9]*\([0-9]*\).*$/\1/p' $defaults/rc.init`
+
+$chmod go+x . .bin $defaults			# to preserve sanity
+
+if $mkdir "$list" 2>$DEVNULL
+then
+  $chmod g+s "$list" 2>$DEVNULL		# to ensure the gid is inherited
+elif $test -d "$list" 2>$DEVNULL
+then
+  $echo "createlist: \"$list\" already exists" 1>&2; exit $EX_USAGE
+else
+  $echo "createlist: \"$list\" cannot be created" 1>&2
+  $echo "createlist: (can you write to the list directory?)" 1>&2
+  exit $EX_UNAVAILABLE
+fi
+cd "$list"
+for a in rc.submit rc.init rc.request help.txt subscribe.txt unsubscribe.txt \
+ archive.txt reject
+do
+  $test -f ../$defaults/$a || $touch ../$defaults/$a	# make sure it exists
+  $ln ../$defaults/$a $a
+done
+
+$mkdir archive
+$mkdir archive/latest
+
+$sed -e "/^maintainer/ s/=/=	$maintainer/" <../$defaults/rc.custom \
+ >rc.custom
+$echo "(Only addresses below this line can be automatically removed)" >>dist
+
+$chmod ugo+x .
+$chmod ugo+r dist
+
+if $test $archiveserver = yes
+then
+  $rmdir archive/latest
+  $rm -f dist subscribe.txt unsubscribe.txt help.txt rc.submit rc.request
+  $cat >rc.submit <<HERE
+HOST=continue_with_rc.request
+HERE
+  $ln ../$defaults/rc.archive rc.request
+else
+  $ln dist accept
+fi
+
+cd ..
+
+$echo 1>&2
+$echo "Installed the following files (many hardlinked):" 1>&2
+$echo 1>&2
+$ls -ld $list $list/* $list/*/* 1>&2 2>$DEVNULL
+$echo 1>&2
+
+set `./$flist -v 2>&1 | $sed -n -e 's/^User: //p' -e 's/^Directory: //p'`
+
+listuser=$1			# The SmartList user
+listdir=$2			# The SmartList directory
+
+if $test $# = 1
+then
+  listdir=`$sed -n \
+   -e "s/^$listuser:[^:]*:[^:]*:[^:]*:[^:]*:\([^:]*\):.*/\1/p" <$etcpasswd`
+  if test -z "$listdir"
+  then
+     listdir=$HOME
+  fi
+fi
+
+$test -d "$listdir/$list" || listdir=`$pwd`
+
+flist=$listdir/$flist
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# WARNING: Do NOT create owner-$list: aliases for SmartList managed lists.
+# Doing so will impair the functionality of SmartList.
+#
+# The $list-dist: alias can be omitted if you are using choplist to distribute
+# this list (and have no desire to fall back on regular sendmail :include:
+# expansion).
+#
+
+$echo "Now make the following entries in your /usr/lib/aliases file:" 1>&2
+$echo \########################################################################
+$echo "$list: \"|exec $flist $list\""
+$echo "$list-request: \"|exec $flist $list-request\""
+#
+#$test $archiveserver = no && $echo "$list-dist: :include:$listdir/$list/dist"
+#
+$echo \########################################################################
+$echo "And make sure to run newaliases afterwards." 1>&2

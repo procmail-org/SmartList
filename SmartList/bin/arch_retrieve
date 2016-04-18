@@ -1,0 +1,318 @@
+#! /bin/sh
+:
+#$Id: arch_retrieve,v 1.52 2000/01/29 06:52:16 guenther Exp $
+
+test=test		# /bin/test
+expr=expr		# /bin/expr
+echo=echo		# /bin/echo
+ls=ls			# /bin/ls
+rm=rm			# /bin/rm
+sed=sed			# /bin/sed
+cat=cat			# /bin/cat
+egrep=egrep		# /bin/egrep
+nice=nice		# /bin/nice
+date=date		# /bin/date
+touch=touch		# /bin/touch
+chmod=chmod		# /bin/chmod
+mimesend=mimesend	# SedHomeDir/.bin/mimesend
+sleep=sleep		# /bin/sleep
+mimencode=mimencode	# /usr/local/bin/mimencode	# metamail MIME package
+formail=formail		# /usr/local/bin/formail
+
+$test -z "$listaddr" &&
+ $echo "Don't start this script directly, it is used in rc.request" && exit 64
+
+decode=$cat			# program or script to read the files that
+				# are to be retrieved.	If any decoding needs
+				# to be done, do it in that program.
+
+search=$egrep			# program or script to egrep the files, it
+				# should accept most egrep options
+
+breakoff_search=512		# the maximum number of matches returned
+breakoff_ls=512			# the maximum number of files listed with ls
+maxfiles=16			# the maximum number of files returned (per
+				# command), this can be overridden with
+				# the "maxfiles nnn" command.  Setting it
+				# to zero will disable checking.
+
+waitsleep=1			# number of seconds to sleep between sending
+				# off files (to limit the load increase)
+				# Don't set this limit too high, or your list
+				# might become unavailable for extended periods
+				# of time (if lots of files are being
+				# requested).
+				# If queueing is enabled, this sleep period
+				# will not be used between putting files in
+				# the queue.
+
+tmprequest=tmp.request
+tmpfrom=tmp.from
+
+$chmod u+w tmp.lock		# so that we can touch it
+
+archivetxt=archive.txt		# the helpfile
+archivedir=archive
+
+standalone=$1
+
+from="arch_retrieve:  requested"
+$echo "arch_retrieve: processing for `$cat $tmpfrom`  `$date`" >$tmpfrom
+
+case "$X_ENVELOPE_TO" in
+  *$list-request*) wrongaddress="" ;;
+  *) wrongaddress="WARNING:
+	Please try to use '$listreq'
+	the next time when issuing archive server requests." ;;
+esac
+
+export decode tmprequest archivedir wrongaddress	# for mimesend
+
+#
+# Check if mimencode is available
+#
+
+if ( exec </dev/null >/dev/null 2>&1; exec $mimencode)
+then
+:
+else
+  mimencode=""
+fi
+
+$formail -k -xSubject: |
+ $sed -e '/^[^a-zA-Z	 ]/,$ d' -e 's/^[	 ]*[Aa]rchive/ARCHIVE/' \
+  -e 's/[	 ]archive\/\/*/ /g' |
+ (  oldwrongaddress="$wrongaddress"
+    wrongaddress="WARNING:
+	Please make sure to start the Subject: of requests to the archive-
+	server with the word archive."
+   if $test ! -z "$oldwrongaddress"
+   then
+      wrongaddress="$wrongaddress
+$oldwrongaddress"
+   fi
+   sendhelp=""
+   ILLEGAL=""
+   while read line
+   do
+      set `cd $archivedir; $echo dummy $line`
+      shift
+      case "$1" in
+	 ARCHIVE|ARCHIVE[Ss]|ARCHIVE[Ss]:|ARCHIVE:) shift
+	    $test ! -z "$wrongaddress" && wrongaddress="$oldwrongaddress";;
+      esac
+      if $test ! -z "$wrongaddress"
+      then
+	 wrongaddress="
+$wrongaddress"
+      fi
+      #
+      # Now call up the local extension file (if any)...
+      #
+      if test -f retrieve.local
+      then
+	 . retrieve.local
+      elif test -f ../SedBinDir/retrieve.local
+      then
+	 . ../SedBinDir/retrieve.local
+      elif test -f ../.bin/retrieve.local
+      then
+	 . ../.bin/retrieve.local
+      fi
+      #
+      # The extension file should have used "set" to clear $1 and tell that
+      # it has processed the current command
+      #
+      case "$1" in
+	 maxfiles|MAXFILES)
+	    maxfiles=$2 ;;
+	 send|sendme|get|getme|gimme|retrieve|mail|\
+	 SEND|SENDME|GET|GETME|GIMME|RETRIEVE|MAIL)
+	    $touch tmp.lock
+	    shift
+	    if $expr $maxfiles = 0 \| $maxfiles \>= $# >/dev/null
+	    then
+	       while $test $# != 0
+	       do
+		  case "$1" in
+		     */../*|../*|*/..|..|[-/]*)
+			$echo "$from ILLEGAL $1" >>$tmpfrom
+			$test -z "$ILLEGAL" && ILLEGAL="$1";;
+		     *) if $test -d "$archivedir/$1"
+			then
+			   $echo "$from DIR_ERROR $1" >>$tmpfrom
+			elif $test -r "$archivedir/$1"
+			then
+			   $echo "$from $1" >>$tmpfrom
+			else
+			   $echo "$from UNAVAIL $1" >>$tmpfrom
+			fi
+			if $test -z "$mimencode"
+			then
+		      ( $formail -rt -I"Subject: archive retrieval: $1" \
+			 -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+			 -i"Content-ID: <$1%$listreq>" \
+			 -I"Precedence: bulk" -X "" <$tmprequest
+			$test ! -z "$wrongaddress" && $echo "$wrongaddress"
+			cd $archivedir
+			if $test -d "./$1"
+			then
+			   $echo ""
+			   $echo "$1 is a directory, use 'ls' instead."
+			elif $test -r "./$1"
+			then
+			   case "`$sed -e 1q <\"./$1\"`" in
+			      Content-[Tt]ype:*) $cat "./$1" ;;
+			      *) $echo ""
+				 $echo "File: $1"
+				 $echo "BEGIN------------cut here-------------"
+				 $decode "./$1"
+				 $echo "END--------------cut here-------------"
+				 ;;
+			   esac
+			else
+			   $echo ""
+			   $echo "File $1 is currently not available."
+			   $echo "N.B. Filenames are case sensitive!"
+			fi
+		      ) | $SENDMAIL $sendmailOPT $sendmailOPTq -t
+			else
+			   $nice $mimesend "$1"
+			fi
+		      ;;
+		  esac
+		  shift
+	       done
+	    else
+	       ( $formail -rt -I"Subject: archive retrieval: $line" \
+		      -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+		      -I"Precedence: bulk" <$tmprequest
+		 $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+		 $echo "Your request expanded to more than $maxfiles files."
+		 $echo "If you want to receive all of them, use the"
+		 $echo "'archive maxfiles $#' command first to raise the"
+		 $echo "limit."
+	       ) | $SENDMAIL $sendmailOPT -t
+	    fi
+	    $test -z "$sendmailOPTq" && $sleep $waitsleep ;;
+	 ls|dir|directory|list|show|\
+	 LS|DIR|DIRECTORY|LIST|SHOW)
+	    shift
+	    case "$*" in
+	       *[/\ ]..[/\ ]*|..[/\ ]*|*[/\ ]..|..|[-/]*|*\ /*)
+		  $echo "$from ILLEGAL $line" >>$tmpfrom
+		  $test -z "$ILLEGAL" && ILLEGAL="$line";;
+	       *)
+		  $touch tmp.lock
+		  $echo "$from $line" >>$tmpfrom
+		   ( $formail -rt -I"Subject: archive retrieval: ls $1" \
+		      -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+		      -i"Content-ID: <$*%$listreq>" \
+		      -I"Precedence: bulk" <$tmprequest
+		     $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+		     cd $archivedir
+		     $echo "ls -l $*"
+		     $echo "BEGIN---------------cut here------------------"
+		     $ls -lL "$@" 2>&1 | $sed -e $breakoff_ls'a\
+Truncating after '$breakoff_ls' names...' -e ${breakoff_ls}q
+		     $echo "END-----------------cut here------------------"
+		   ) | $SENDMAIL $sendmailOPT -t
+		  $sleep $waitsleep ;;
+	    esac ;;
+	 search|grep|egrep|fgrep|find|\
+	 SEARCH|GREP|EGREP|FGREP|FIND)
+	    iflag="-i"; nflag="-n"; flags=""; ready=no
+	    while $test ! -z "$ready"
+	    do
+	       shift
+	       case "$1" in
+		  -i-) iflag="";;
+		  -n-) nflag="";;
+		  -[chlnv]) flags="$flags $1" ;;
+		  -?) ;;				# skip unknown flags
+		  *) ready="" ;;
+	       esac
+	    done
+	    regxp="$1"
+	    $test $# != 0 && shift
+	    case "$*" in
+	       *[/\ ]..[/\ ]*|..[/\ ]*|*[/\ ]..|..|[-/]*|*\ /*)
+		  $echo "$from ILLEGAL $line" >>$tmpfrom
+		  $test -z "$ILLEGAL" && ILLEGAL="$line";;
+	       *) $touch tmp.lock
+		  $echo "$from $line" >>$tmpfrom
+		( $formail -rt -I"Subject: archive retrieval: $line" \
+		   -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+		   -I"Precedence: bulk" <$tmprequest
+		  $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+		  cd $archivedir
+		  $echo "$line"
+		  $echo "BEGIN---------------cut here------------------"
+		  $nice $search $nflag $iflag $flags -e $regxp $* \
+		   </dev/null 2>&1 | $sed -e $breakoff_search'a\
+Truncating after '$breakoff_search' matches...' -e ${breakoff_search}q
+		  $echo "END-----------------cut here------------------"
+		) | $SENDMAIL $sendmailOPT -t
+		  $sleep $waitsleep ;;
+	    esac ;;
+	 version|VERSION)
+	       $touch tmp.lock
+		( $formail -rt -I"Subject: archive retrieval: $line" \
+		   -i"From: $listreq" -A"X-Loop: $listaddr" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+		   <$tmprequest
+		  $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+		  flist -v 2>&1 | sed -e "/^User:/,$ d"
+		  echo ""
+		  procmail -v 2>&1
+		) | $SENDMAIL $sendmailOPT -t
+	       $sleep $waitsleep ;;
+	 quit|QUIT|exit|EXIT)
+	       while read line
+	       do
+	       :
+	       done ;;
+	 ""|\#*) ;;
+	 *) $test -z "$sendhelp" && sendhelp="$1" ;;
+      esac
+   done
+   if $test ! -z "$sendhelp" -o ! -z "$ILLEGAL"
+   then
+       ( $formail -rt -I"Subject: archive retrieval info" \
+	  -i"From: $listreq" -A"X-Loop: $listaddr" -I"Precedence: bulk" \
+ -i"Reply-To: Please.write.a.new.mail.instead.of.replying@FIRST.WORD.archive" \
+	  <$tmprequest
+	 $test ! -z "$wrongaddress" && $echo "$wrongaddress"
+	 case "X$sendhelp" in
+	    X[Hh][Ee][Ll][Pp]|X[Ii][Nn][Ff][Oo]|X)
+	       $echo "$from $sendhelp." >>$tmpfrom ;;
+	    *) $echo "$from unknown command $sendhelp." >>$tmpfrom
+	       $echo "Unknown command $sendhelp." ;;
+	 esac
+	 $test ! -z "$ILLEGAL" && $echo "Illegal filename $ILLEGAL requested."
+	 $echo ""
+	 $cat $archivetxt
+	 if $test ! -z "$standalone"
+	 then
+	    $echo ""
+	    $test -f help.txt && $cat help.txt
+	    $test -f info.txt && $cat info.txt
+	 fi
+       ) | $SENDMAIL $sendmailOPT -t
+   fi
+ )
+
+if $test ! -z "$archive_log"
+then
+  $echo "arch_retrieve: done  `$date`" >>$tmpfrom
+  $cat $tmpfrom >>$archive_log
+fi
+
+if $test ! -z "$sendmailQflush"
+then
+  $sendmailQflush 2>/dev/null &
+fi

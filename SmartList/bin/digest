@@ -1,0 +1,165 @@
+#! /bin/sh
+:
+#$Id: digest,v 1.27 1999/11/22 05:40:48 guenther Exp $
+
+test=test		# /bin/test
+echo=echo		# /bin/echo
+ls=ls			# /bin/ls
+awk=awk			# /usr/bin/awk
+cat=cat			# /bin/cat
+date=date		# /bin/date
+rm=rm			# /bin/rm
+sed=sed			# /bin/sed
+expr=expr		# /bin/expr
+formail=formail		# /usr/local/bin/formail
+
+$test -z "$listaddr" &&
+ $echo "Don't start this script directly, it is used in rc.submit" && exit 64
+
+tmprequest=tmp.request
+tmpfrom=tmp.from
+
+digestheader=archive/latest/digest.header
+digestadmin=digest.admin
+digestadmin2=archive/latest/$digestadmin
+digestbody=archive/latest/digest.body
+digesttrailer=archive/latest/digest.trailer
+
+if $test -z "$alt_sendmail"
+then
+  $echo "$digest_age $digest_size $archive_hist $UMASK
+$SENDMAIL $sendmailOPT $listdist" >.digest.params
+else
+  $echo "$digest_age $digest_size $archive_hist $UMASK
+$alt_sendmail $SENDMAIL $sendmailOPT $sendmailOPTi" >.digest.params
+fi
+
+$awk '
+BEGIN					{ lines=0;mode=0; }
+					{ mtch=0; }
+/^$/					{ mtch=1; }
+/^[	 ][	 ]*$/			{ mtch=2; }
+/^------------------------------$/	{ mtch=3; }
+/^--------------------------------$/	{ mtch=4; }
+/^\.$/					{ mtch=5; }
+{ if(mode==0)
+   { print($0) >"'$tmpfrom'";
+     if(mtch==1)
+	mode=1;
+     next;
+   }
+  if(mode==1 && mtch)
+     next;
+  mode=2;
+  if(mtch==1)
+   { ++lines;next;
+   }
+  while(lines)
+   { print("");--lines;
+   }
+  if(mtch==3)
+     print("- ----------------------------");
+  else if(mtch==4)
+     print("- ------------------------------");
+  else if(mtch==5)
+     printf(" .");
+  else
+     print($0);
+}
+' >$tmprequest
+
+$test -f $digestbody && flush_digests -c
+
+$cat >>$digestbody <<HERE
+------------------------------
+
+HERE
+
+for a in Date From To Cc Subject Message-ID Keywords Summary
+do
+  b=`$formail -X $a: -a"Subject: Unidentified subject!" <$tmpfrom`
+  if $test ! -z "$b"
+  then
+     $echo "$b" >>$digestbody
+  fi
+done
+
+$formail -X Content- <$tmpfrom >>$digestbody
+
+$echo "" >>$digestbody
+$cat $tmprequest >>$digestbody
+$echo "" >>$digestbody
+
+if $test ! -f $digesttrailer
+then
+  Year=`LANG='' LC_TIME='' LC_ALL=''$date +%y 2>&1`
+  case "$Year" in
+     ????|9?) ;;
+     *) Year=`LANG='' LC_TIME='' LC_ALL='' $date +%Y 2>&1`
+	case "$Year" in
+	   ????) ;;
+	   *) Year=`set \`$date\`; echo $6` ;;	# for the POSIX deprived
+	esac;;
+  esac
+  Issue=0
+
+  if $test -f $digestheader
+  then
+     set dummy `$sed -n \
+      -e '1,/^$/ s/^Subject:.*Digest V\([0-9]*\) #\([0-9]*\)/\1 \2/p' \
+      <$digestheader`
+     $test $Year = "$2" && Issue=$3
+  fi
+
+  Issue=`$expr 1 + $Issue`
+
+  $cat >$digestheader <<HERE
+From: $listreq
+Subject: $list Digest V$Year #$Issue
+X-Loop: $listaddr
+X-Mailing-List: <$listaddr> archive/volume$Year/$Issue
+Precedence: list
+MIME-Version: 1.0
+Content-Type: multipart/digest; boundary="----------------------------"
+To: $listaddr${reply_to+
+}${reply_to-${undigested_list+
+Reply-To: }$undigested_list}
+
+------------------------------
+
+Content-Type: text/plain
+
+$list Digest				Volume $Year : Issue $Issue
+
+Today's Topics:
+HERE
+
+  $cat >$digesttrailer <<HERE
+--------------------------------
+End of $list Digest V$Year Issue #$Issue
+HERE
+  b=`$sed -n -e '$ s/./*/gp' <$digesttrailer`
+  $echo "$b" >>$digesttrailer
+fi
+
+$echo  "  `$formail -czxSubject: -a'Subject: Unidentified subject!' <$tmpfrom |
+ $sed -e 's/[	 ][	 ]*/ /g' \
+ -e 's/$/\
+       \
+       \
+       \
+       \
+       \
+ /' -e 's/^\(....................................\).*/\1/'
+ `  [ `
+ $formail -czx From: <$tmpfrom | $sed -e 's/[	 ][	 ]*/ /g' \
+      -e 's/^\(...................................\).*/\1/'
+ ` ]" >>$digestheader
+: >$tmprequest 2>$tmpfrom
+
+#
+# Check again, maybe we exceed the time or size limits now already.
+#
+
+flush_digests -c
+exit 0
